@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>FastAPI Calculator</title>
   <style>
     body {
@@ -40,30 +40,32 @@
       color: white;
       border: none;
       cursor: pointer;
+      transition: background-color 0.2s ease;
     }
     button:hover {
       background-color: #0056b3;
     }
-    .result {
+    .result, .error {
       margin-top: 1rem;
       text-align: center;
       font-size: 1.2rem;
+    }
+    .result {
       color: green;
     }
     .error {
       color: red;
-      text-align: center;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>FastAPI Addition</h1>
-    <input id="a" type="number" placeholder="First number" required>
-    <input id="b" type="number" placeholder="Second number" required>
-    <input id="apiKey" type="password" placeholder="Enter API key" required>
+    <input id="a" type="number" placeholder="First number" required />
+    <input id="b" type="number" placeholder="Second number" required />
+    <input id="apiKey" type="password" placeholder="Enter API Key" required />
     <button onclick="addNumbers()">Add</button>
-    <div id="output" class="result"></div>
+    <div id="output"></div>
   </div>
 
   <script>
@@ -84,7 +86,7 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
+            "x-api-key": apiKey
           },
           body: JSON.stringify({ a, b })
         });
