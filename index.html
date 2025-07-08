@@ -13,23 +13,6 @@
   <div id="root" class="w-full flex items-center justify-center"></div>
   <script type="text/babel">
     const tableSchemas = {
-      developers: [
-        { name: 'first_name', label: 'First Name', type: 'text' },
-        { name: 'last_name', label: 'Last Name', type: 'text' },
-        { name: 'email', label: 'Email', type: 'email' },
-        { name: 'password', label: 'Password', type: 'password' }
-      ],
-      projects: [
-        { name: 'name', label: 'Project Name', type: 'text' },
-        { name: 'description', label: 'Description', type: 'textarea' },
-        { name: 'status', label: 'Status', type: 'select', options: ['Planning', 'In_Progress', 'Completed', 'On_Hold'] },
-        { name: 'priority', label: 'Priority', type: 'select', options: ['Low', 'Medium', 'High'] },
-        { name: 'delivery_date', label: 'Delivery Date', type: 'date' }
-      ],
-      tasks: [
-        { name: 'title', label: 'Task Title', type: 'text' },
-        { name: 'description', label: 'Description', type: 'textarea' }
-      ],
       activities: [
         { name: 'developer_id', label: 'Developer', type: 'select', dynamic: true, dataKey: 'developers', valueKey: 'developer_id', labelKey: 'name' },
         { name: 'project_id', label: 'Project', type: 'select', dynamic: true, dataKey: 'projects', valueKey: 'project_id', labelKey: 'name' },
@@ -42,27 +25,19 @@
     };
 
     function App() {
-      const [selectedTable, setSelectedTable] = React.useState('');
       const [formData, setFormData] = React.useState({});
       const [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
 
       React.useEffect(() => {
-        if (selectedTable === 'activities') {
-          fetch('https://fastapi.engineeringdevelopment.online/dropdown-data')
-            .then(response => response.json())
-            .then(data => setDropdownData(data))
-            .catch(error => console.error('Error fetching dropdown data:', error));
-        }
-      }, [selectedTable]);
-
-      const handleTableChange = (e) => {
-        setSelectedTable(e.target.value);
-        setFormData({});
-      };
+        fetch('https://fastapi.engineeringdevelopment.online/dropdown-data')
+          .then(response => response.json())
+          .then(data => setDropdownData(data))
+          .catch(error => console.error('Error fetching dropdown data:', error));
+      }, []);
 
       const handleInputChange = (e, fieldName, field) => {
         const newFormData = { ...formData, [fieldName]: e.target.value };
-        if (fieldName === 'task_id' && selectedTable === 'activities') {
+        if (fieldName === 'task_id') {
           const selectedTask = dropdownData.tasks.find(task => task.task_id === parseInt(e.target.value));
           newFormData.description = selectedTask ? (selectedTask.description || '') : '';
         }
@@ -72,12 +47,10 @@
       const handleSubmit = async (e) => {
         e.preventDefault();
         const payload = {
-          table: selectedTable,
+          table: 'activities',
           data: { ...formData }
         };
-        if (selectedTable === 'activities') {
-          delete payload.data.description;
-        }
+        delete payload.data.description;
         try {
           const response = await fetch('https://fastapi.engineeringdevelopment.online/insert', {
             method: 'POST',
@@ -86,6 +59,7 @@
           });
           if (response.ok) {
             alert('Data submitted successfully!');
+            setFormData({});
           } else {
             const errorData = await response.json();
             alert(`Failed to submit data: ${errorData.detail || 'Unknown error'}`);
@@ -100,21 +74,31 @@
         if (field.type === 'select' && field.dynamic) {
           const options = dropdownData[field.dataKey] || [];
           return (
-            <select
-              className="w-full p-2 border rounded"
-              value={formData[field.name] || ''}
-              onChange={(e) => handleInputChange(e, field.name, field)}
-            >
-              <option value="">Select {field.label}</option>
-              {options.map((option) => (
-                <option key={option[field.valueKey]} value={option[field.valueKey]}>
-                  {option[field.labelKey]} (ID: {option[field.valueKey]})
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                className="w-full p-2 border rounded"
+                value={formData[field.name] || ''}
+                onChange={(e) => handleInputChange(e, field.name, field)}
+              >
+                <option value="">Select {field.label}</option>
+                {options.map((option) => (
+                  <option key={option[field.valueKey]} value={option[field.valueKey]}>
+                    {option[field.labelKey]} (ID: {option[field.valueKey]})
+                  </option>
+                ))}
+              </select>
+              {field.name === 'task_id' && (
+                <a
+                  href="add-task.html"
+                  className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  Add Task
+                </a>
+              )}
+            </div>
           );
         }
-        if (field.name === 'description' && selectedTable === 'activities') {
+        if (field.name === 'description') {
           return (
             <textarea
               className="w-full p-2 border rounded bg-gray-100"
@@ -162,38 +146,21 @@
 
       return (
         <div className="bg-white rounded-lg shadow-md p-6 sm:p-8 w-full max-w-2xl">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-center text-gray-800">Data Entry Form</h1>
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Select Table</label>
-            <select
-              className="w-full p-2 border rounded"
-              value={selectedTable}
-              onChange={handleTableChange}
+          <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-center text-gray-800">Activity Entry Form</h1>
+          <form onSubmit={handleSubmit}>
+            {tableSchemas.activities.map((field) => (
+              <div key={field.name} className="mb-4">
+                <label className="block text-sm font-medium mb-1">{field.label}</label>
+                {renderInput(field)}
+              </div>
+            ))}
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
             >
-              <option value="">Select a table</option>
-              {Object.keys(tableSchemas).map((table) => (
-                <option key={table} value={table}>
-                  {table.charAt(0).toUpperCase() + table.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-          {selectedTable && (
-            <form onSubmit={handleSubmit}>
-              {tableSchemas[selectedTable].map((field) => (
-                <div key={field.name} className="mb-4">
-                  <label className="block text-sm font-medium mb-1">{field.label}</label>
-                  {renderInput(field)}
-                </div>
-              ))}
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
-              >
-                Submit
-              </button>
-            </form>
-          )}
+              Submit
+            </button>
+          </form>
         </div>
       );
     }
