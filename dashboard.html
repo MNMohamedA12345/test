@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Professional Activities Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
+  <div id="root" class="w-full max-w-7xl mx-auto"></div>
+  <div id="error-fallback" class="hidden text-center text-red-700 p-4"></div>
+  <script type="text/babel">
+    // Mock data for testing
+    window.mockData = {
+      summary: { total_developers: 4, total_projects: 4, total_tasks: 6, total_activities: 2 },
+      projectStatus: [{ status: "Planning", project_count: 2 }, { status: "In_Progress", project_count: 1 }, { status: "Completed", project_count: 1 }],
+      activityStatus: [{ status: "To_Do", activity_count: 2 }],
+      dailyActivities: [{ day: "2025-07-01", activities: 2 }, { day: "2025-07-02", activities: 1 }],
+      topDevelopers: [{ name: "Laila Ahmed", activity_count: 1 }, { name: "Mahmoud Nasser", activity_count: 1 }],
+      tasksWithoutActivities: [{ task_id: 1, title: "Set up environment" }, { task_id: 3, title: "creating the adding UI" }],
+      projectPriority: [{ status: "Planning", priority: "Unknown", count: 2 }, { status: "In_Progress", priority: "Unknown", count: 1 }],
+      avgEstimatedDays: [{ name: "Laila Ahmed", avg_estimated: 5655 }, { name: "Mahmoud Nasser", avg_estimated: 5 }],
+      upcomingDeadlines: [{ name: "UI design", delivery_date: "2025-07-10", status: "Planning" }],
+      projectActivityStatus: { active: 3, idle: 1 },
+      activities: [
+        {"activity_id":1,"developer_id":1,"project_id":3,"task_id":5,"details":"jhgjgjghjh","status":"To_Do","estimated_days":5655},
+        {"activity_id":2,"developer_id":6,"project_id":2,"task_id":5,"details":null,"status":"To_Do","estimated_days":5}
+      ],
+      dropdownData: {
+        developers: [
+          {"developer_id":1,"name":"Laila Ahmed"},{"developer_id":5,"name":"Laila Ahmed"},
+          {"developer_id":6,"name":"Mahmoud Nasser"},{"developer_id":7,"name":"Abdo Alaa"}
+        ],
+        projects: [
+          {"project_id":1,"name":"New UI Design"},{"project_id":2,"name":"Dashboard test"},
+          {"project_id":3,"name":"UI design"},{"project_id":4,"name":"nvnvgh"}
+        ],
+        tasks: [
+          {"task_id":1,"title":"Set up environment","description":"Install dependencies and structure"},
+          {"task_id":3,"title":"creating the adding UI","description":"creating a simple adding UI"},
+          {"task_id":4,"title":"Set up environment","description":"Install dependencies and structure"},
+          {"task_id":5,"title":"new_task","description":"great task!"},
+          {"task_id":6,"title":"fsfsd","description":"fsdfsdfsdfsdfsdfsd"},
+          {"task_id":7,"title":"new_Task2","description":"Any Meny Mo"}
+        ]
+      },
+      latestProjects: [
+        {"project_id":4,"name":"nvnvgh","status":"Active"},
+        {"project_id":3,"name":"UI design","status":"Active"},
+        {"project_id":2,"name":"Dashboard test","status":"Active"},
+        {"project_id":1,"name":"New UI Design","status":"Idle"}
+      ],
+      projectActivities: [
+        {"project_id":3,"name":"UI design","status":"To_Do","activity_count":1},
+        {"project_id":2,"name":"Dashboard test","status":"To_Do","activity_count":1},
+        {"project_id":1,"name":"New UI Design","status":"None","activity_count":0},
+        {"project_id":4,"name":"nvnvgh","status":"None","activity_count":0}
+      ],
+      projectDevelopers: [
+        {"project_id":3,"project_name":"UI design","developer_name":"Laila Ahmed","activity_count":1},
+        {"project_id":2,"project_name":"Dashboard test","developer_name":"Mahmoud Nasser","activity_count":1},
+        {"project_id":1,"project_name":"New UI Design","developer_name":"None","activity_count":0},
+        {"project_id":4,"project_name":"nvnvgh","developer_name":"None","activity_count":0}
+      ],
+      latestActivitiesByStatus: {
+        "To_Do": [
+          {"activity_id":2,"developer_id":6,"project_id":2,"task_id":5,"details":null,"status":"To_Do","estimated_days":5},
+          {"activity_id":1,"developer_id":1,"project_id":3,"task_id":5,"details":"jhgjgjghjh","status":"To_Do","estimated_days":5655}
+        ],
+        "In_Progress": [],
+        "Done": []
+      },
+      developerTasks: [
+        {
+          "developer_name": "Laila Ahmed",
+          "top_tasks": [
+            {"task_id":5,"title":"new_task","activity_count":1}
+          ],
+          "total_tasks": 1
+        },
+        {
+          "developer_name": "Mahmoud Nasser",
+          "top_tasks": [
+            {"task_id":5,"title":"new_task","activity_count":1}
+          ],
+          "total_tasks": 1
+        }
+      ],
+      activeTasks: [
+        {"task_id":5,"title":"new_task","status":"To_Do"}
+      ]
+    };
+
+    function Dashboard() {
+      var [view, setView] = React.useState('summary');
+      var [summary, setSummary] = React.useState({});
+      var [projectStatus, setProjectStatus] = React.useState([]);
+      var [activityStatus, setActivityStatus] = React.useState([]);
+      var [dailyActivities, setDailyActivities] = React.useState([]);
+      var [topDevelopers, setTopDevelopers] = React.useState([]);
+      var [tasksWithoutActivities, setTasksWithoutActivities] = React.useState([]);
+      var [projectPriority, setProjectPriority] = React.useState([]);
+      var [avgEstimatedDays, setAvgEstimatedDays] = React.useState([]);
+      var [upcomingDeadlines, setUpcomingDeadlines] = React.useState([]);
+      var [projectActivityStatus, setProjectActivityStatus] = React.useState({});
+      var [activities, setActivities] = React.useState([]);
+      var [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
+      var [latestProjects, setLatestProjects] = React.useState([]);
+      var [projectActivities, setProjectActivities] = React.useState([]);
+      var [projectDevelopers, setProjectDevelopers] = React.useState([]);
+      var [latestActivitiesByStatus, setLatestActivitiesByStatus] = React.useState({ To_Do: [], In_Progress: [], Done: [] });
+      var [developerTasks, setDeveloperTasks] = React.useState([]);
+      var [activeTasks, setActiveTasks] = React.useState([]);
+      var [error, setError] = React.useState(null);
+      // Store chart instances
+      var chartRefs = React.useRef({});
+
+      function fetchData(endpoint, setter, errorMsg) {
+        console.log('Fetching from ' + endpoint);
+        // Uncomment to use mock data for testing
+        // if (window.mockData[endpoint]) {
+        //   console.log(endpoint + ' mock data:', window.mockData[endpoint]);
+        //   setter(window.mockData[endpoint]);
+        //   return;
+        // }
+        fetch('https://fastapi.engineeringdevelopment.online/' + endpoint)
+          .then(function(response) {
+            console.log(endpoint + ' response status:', response.status, response.statusText);
+            if (!response.ok) throw new Error('HTTP error! Status: ' + response.status + ' ' + response.statusText);
+            return response.json();
+          })
+          .then(function(data) {
+            console.log(endpoint + ' data received:', data);
+            setter(data);
+          })
+          .catch(function(err) {
+            console.error('Error fetching ' + endpoint + ':', err);
+            setError(errorMsg + ': ' + err.message);
+          });
+      }
+
+      React.useEffect(function() {
+        fetchData('summary', setSummary, 'Failed to load summary data');
+        fetchData('project-status', setProjectStatus, 'Failed to load project status data');
+        fetchData('activity-status', setActivityStatus, 'Failed to load activity status data');
+        fetchData('daily-activities', setDailyActivities, 'Failed to load daily activities data');
+        fetchData('top-developers', setTopDevelopers, 'Failed to load top developers data');
+        fetchData('tasks-without-activities', setTasksWithoutActivities, 'Failed to load tasks without activities data');
+        fetchData('project-priority', setProjectPriority, 'Failed to load project priority data');
+        fetchData('avg-estimated-days', setAvgEstimatedDays, 'Failed to load average estimated days data');
+        fetchData('upcoming-deadlines', setUpcomingDeadlines, 'Failed to load upcoming deadlines data');
+        fetchData('project-activity-status', setProjectActivityStatus, 'Failed to load project activity status data');
+        fetchData('activities', setActivities, 'Failed to load activities data');
+        fetchData('dropdown-data', setDropdownData, 'Failed to load dropdown data');
+        fetchData('latest-projects', setLatestProjects, 'Failed to load latest projects data');
+        fetchData('project-activities', setProjectActivities, 'Failed to load project activities data');
+        fetchData('project-developers', setProjectDevelopers, 'Failed to load project developers data');
+        fetchData('latest-activities-by-status', setLatestActivitiesByStatus, 'Failed to load latest activities by status data');
+        fetchData('developer-tasks', setDeveloperTasks, 'Failed to load developer tasks data');
+        fetchData('active-tasks', setActiveTasks, 'Failed to load active tasks data');
+      }, []);
+
+      React.useEffect(function() {
+        console.log('Rendering charts with view:', view);
+        try {
+          // Destroy existing chart instances
+          Object.keys(chartRefs.current).forEach(function(key) {
+            if (chartRefs.current[key]) {
+              chartRefs.current[key].destroy();
+              chartRefs.current[key] = null;
+              console.log('Destroyed chart:', key);
+            }
+          });
+
+          if (view === 'summary') {
+            // Project Activities Bar Chart
+            var projectActivitiesCtx = document.getElementById('projectActivitiesChart') && document.getElementById('projectActivitiesChart').getContext('2d');
+            if (projectActivitiesCtx && projectActivities.length > 0) {
+              var projectIds = [...new Set(projectActivities.map(function(p) { return p.project_id; }))];
+              var statuses = ['To_Do', 'In_Progress', 'Done', 'None'];
+              var datasets = statuses.map(function(status) {
+                return {
+                  label: status.replace('_', ' '),
+                  data: projectIds.map(function(id) {
+                    var item = projectActivities.find(function(p) { return p.project_id === id && p.status === status; });
+                    return item ? item.activity_count : 0;
+                  }),
+                  backgroundColor: status === 'To_Do' ? '#FF6384' : status === 'In_Progress' ? '#36A2EB' : status === 'Done' ? '#4BC0C0' : '#D3D3D3'
+                };
+              });
+              chartRefs.current.projectActivitiesChart = new Chart(projectActivitiesCtx, {
+                type: 'bar',
+                data: {
+                  labels: projectIds.map(function(id) {
+                    var project = projectActivities.find(function(p) { return p.project_id === id; });
+                    return project ? project.name : 'Project ' + id;
+                  }),
+                  datasets: datasets
+                },
+                options: {
+                  responsive: true,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Activities per Project', font: { size: 16 } } },
+                  scales: { y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Activity Count' } }, x: { stacked: true } }
+                }
+              });
+            }
+          }
+
+          if (view === 'projects') {
+            // Project Status Bar Chart
+            var projectCtx = document.getElementById('projectStatusChart') && document.getElementById('projectStatusChart').getContext('2d');
+            if (projectCtx && projectStatus.length > 0) {
+              chartRefs.current.projectStatusChart = new Chart(projectCtx, {
+                type: 'bar',
+                data: {
+                  labels: projectStatus.map(function(s) { return s.status; }),
+                  datasets: [{
+                    label: 'Project Count',
+                    data: projectStatus.map(function(s) { return s.project_count; }),
+                    backgroundColor: '#36A2EB',
+                    borderColor: '#2B8AC6',
+                    borderWidth: 1
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Status Breakdown', font: { size: 16 } } },
+                  scales: { y: { beginAtZero: true, title: { display: true, text: 'Projects' } } }
+                }
+              });
+            }
+
+            // Project Priority Stacked Bar Chart
+            var priorityCtx = document.getElementById('projectPriorityChart') && document.getElementById('projectPriorityChart').getContext('2d');
+            if (priorityCtx && projectPriority.length > 0) {
+              var statuses = ['Planning', 'In_Progress', 'Completed', 'On_Hold'];
+              var priorities = ['Low', 'Medium', 'High', 'Unknown'];
+              var datasets = priorities.map(function(priority) {
+                return {
+                  label: priority,
+                  data: statuses.map(function(status) {
+                    var item = projectPriority.find(function(p) { return p.status === status && p.priority === priority; });
+                    return item ? item.count : 0;
+                  }),
+                  backgroundColor: priority === 'Low' ? '#4BC0C0' : priority === 'Medium' ? '#36A2EB' : priority === 'High' ? '#FF6384' : '#D3D3D3'
+                };
+              });
+              chartRefs.current.projectPriorityChart = new Chart(priorityCtx, {
+                type: 'bar',
+                data: {
+                  labels: statuses,
+                  datasets: datasets
+                },
+                options: {
+                  responsive: true,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Priority by Status', font: { size: 16 } } },
+                  scales: { y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Projects' } }, x: { stacked: true } }
+                }
+              });
+            }
+
+            // Developer Charts for Each Project
+            projectDevelopers.forEach(function(project) {
+              var ctx = document.getElementById('projectDevelopersChart_' + project.project_id) && document.getElementById('projectDevelopersChart_' + project.project_id).getContext('2d');
+              if (ctx && project.developer_name !== "None") {
+                var developers = projectDevelopers.filter(function(p) { return p.project_id === project.project_id && p.developer_name !== "None"; });
+                chartRefs.current['projectDevelopersChart_' + project.project_id] = new Chart(ctx, {
+                  type: 'bar',
+                  data: {
+                    labels: developers.map(function(d) { return d.developer_name; }),
+                    datasets: [{
+                      label: 'Activity Count',
+                      data: developers.map(function(d) { return d.activity_count; }),
+                      backgroundColor: '#36A2EB',
+                      borderColor: '#2B8AC6',
+                      borderWidth: 1
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' }, title: { display: true, text: 'Developers for ' + project.project_name, font: { size: 16 } } },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Activities' } } }
+                  }
+                });
+              }
+            });
+          }
+
+          if (view === 'activities') {
+            // Activity Status Donut Chart
+            var activityCtx = document.getElementById('activityStatusChart') && document.getElementById('activityStatusChart').getContext('2d');
+            if (activityCtx && activityStatus.length > 0) {
+              chartRefs.current.activityStatusChart = new Chart(activityCtx, {
+                type: 'doughnut',
+                data: {
+                  labels: activityStatus.map(function(s) { return s.status.replace('_', ' '); }),
+                  datasets: [{
+                    data: activityStatus.map(function(s) { return s.activity_count; }),
+                    backgroundColor: ['#FF6384', '#36A2EB', '#4BC0C0'],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Activity Status Breakdown', font: { size: 16 } } }
+                }
+              });
+            }
+          }
+
+          if (view === 'developers') {
+            // Average Estimated Days Bar Chart
+            var avgDaysCtx = document.getElementById('avgEstimatedDaysChart') && document.getElementById('avgEstimatedDaysChart').getContext('2d');
+            if (avgDaysCtx && avgEstimatedDays.length > 0) {
+              console.log('Rendering avgEstimatedDays chart with data:', avgEstimatedDays);
+              chartRefs.current.avgEstimatedDaysChart = new Chart(avgDaysCtx, {
+                type: 'bar',
+                data: {
+                  labels: avgEstimatedDays.map(function(d) { return d.name; }),
+                  datasets: [{
+                    label: 'Average Estimated Days',
+                    data: avgEstimatedDays.map(function(d) { return Math.min(d.avg_estimated, 100); }),
+                    backgroundColor: '#36A2EB',
+                    borderColor: '#2B8AC6',
+                    borderWidth: 1
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: 'Average Estimated Days per Developer', font: { size: 16 } },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          var actualValue = avgEstimatedDays[context.dataIndex].avg_estimated;
+                          return 'Average Days: ' + actualValue;
+                        }
+                      }
+                    }
+                  },
+                  scales: {
+                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Days (Capped at 100)' } }
+                  }
+                }
+              });
+            }
+          }
+
+        } catch (chartError) {
+          console.error('Error rendering charts:', chartError);
+          setError('Failed to render charts: ' + chartError.message);
+        }
+
+        // Cleanup on unmount
+        return function() {
+          Object.keys(chartRefs.current).forEach(function(key) {
+            if (chartRefs.current[key]) {
+              chartRefs.current[key].destroy();
+              chartRefs.current[key] = null;
+              console.log('Cleaned up chart on unmount:', key);
+            }
+          });
+        };
+      }, [view, activityStatus, projectStatus, projectPriority, avgEstimatedDays, projectActivities, projectDevelopers]);
+
+      function getDeveloperName(id) {
+        var developer = dropdownData.developers.find(function(d) { return d.developer_id === id; });
+        return developer ? developer.name + ' (ID: ' + developer.developer_id + ')' : 'Developer ' + id;
+      }
+
+      function getProjectName(id) {
+        var project = dropdownData.projects.find(function(p) { return p.project_id === id; });
+        return project ? project.name + ' (ID: ' + project.project_id + ')' : 'Project ' + id;
+      }
+
+      function getTaskTitle(id) {
+        var task = dropdownData.tasks.find(function(t) { return t.task_id === id; });
+        return task ? task.title + ' (ID: ' + task.task_id + ')' : 'Task ' + id;
+      }
+
+      // Generate calendar for deadlines
+      function generateCalendar(deadlines) {
+        var today = new Date('2025-07-08'); // Set to current date for testing
+        var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        var monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        var daysInMonth = monthEnd.getDate();
+        var firstDay = monthStart.getDay();
+        var calendarDays = [];
+
+        // Add empty cells for days before the first day of the month
+        for (var i = 0; i < firstDay; i++) {
+          calendarDays.push(null);
+        }
+
+        // Add days of the month
+        for (var day = 1; day <= daysInMonth; day++) {
+          var dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          var dayDeadlines = deadlines.filter(function(d) { return d.delivery_date === dateStr; });
+          calendarDays.push({ day: day, deadlines: dayDeadlines });
+        }
+
+        return calendarDays;
+      }
+
+      console.log('Rendering Dashboard with view:', view, 'error:', error);
+
+      return (
+        <div className="bg-white rounded-lg shadow-md p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-0">Professional Activities Dashboard</h1>
+            <select
+              value={view}
+              onChange={function(e) { setView(e.target.value); }}
+              className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+            >
+              <option value="summary">Summary</option>
+              <option value="projects">Projects</option>
+              <option value="activities">Activities</option>
+              <option value="developers">Developers</option>
+              <option value="tasks">Tasks</option>
+              <option value="deadlines">Deadlines</option>
+            </select>
+          </div>
+          {error && (
+            <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+          {view === 'summary' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Summary</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="bg-blue-100 p-4 rounded-lg shadow">
+                  <h3 className="text-lg font-medium text-gray-700">Total Developers</h3>
+                  <p className="text-2xl font-bold text-blue-600">{summary.total_developers || '0'}</p>
+                </div>
+                <div className="bg-green-100 p-4 rounded-lg shadow">
+                  <h3 className="text-lg font-medium text-gray-700">Total Projects</h3>
+                  <p className="text-2xl font-bold text-green-600">{summary.total_projects || '0'}</p>
+                </div>
+                <div className="bg-yellow-100 p-4 rounded-lg shadow">
+                  <h3 className="text-lg font-medium text-gray-700">Total Tasks</h3>
+                  <p className="text-2xl font-bold text-yellow-600">{summary.total_tasks || '0'}</p>
+                </div>
+                <div className="bg-purple-100 p-4 rounded-lg shadow">
+                  <h3 className="text-lg font-medium text-gray-700">Total Activities</h3>
+                  <p className="text-2xl font-bold text-purple-600">{summary.total_activities || '0'}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Latest 4 Projects</h3>
+                  {latestProjects.length === 0 ? (
+                    <p className="text-gray-600">No projects available</p>
+                  ) : (
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-200">
+                          <th className="p-3 text-left text-sm font-medium text-gray-700">Project</th>
+                          <th className="p-3 text-left text-sm font-medium text-gray-700">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {latestProjects.map(function(project, index) {
+                          return (
+                            <tr key={project.project_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                              <td className="p-3 text-sm text-gray-600">{project.name} (ID: {project.project_id})</td>
+                              <td className="p-3 text-sm text-gray-600">{project.status}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Activities per Project</h3>
+                  {projectActivities.length === 0 ? (
+                    <p className="text-gray-600">No project activity data available</p>
+                  ) : (
+                    <canvas id="projectActivitiesChart" className="w-full"></canvas>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {view === 'projects' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Project Insights</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Project Status Breakdown</h3>
+                  {projectStatus.length === 0 ? (
+                    <p className="text-gray-600">No project status data available</p>
+                  ) : (
+                    <canvas id="projectStatusChart" className="w-full"></canvas>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Project Priority by Status</h3>
+                  {projectPriority.length === 0 ? (
+                    <p className="text-gray-600">No project priority data available</p>
+                  ) : (
+                    <canvas id="projectPriorityChart" className="w-full"></canvas>
+                  )}
+                </div>
+              </div>
+              <h3 className="text-lg font-medium mb-2 mt-6 text-gray-700">Developers per Project</h3>
+              {projectDevelopers.length === 0 ? (
+                <p className="text-gray-600">No developer data available</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {[...new Set(projectDevelopers.map(function(p) { return p.project_id; }))].map(function(projectId) {
+                    var project = projectDevelopers.find(function(p) { return p.project_id === projectId; });
+                    return (
+                      <div key={projectId}>
+                        <h4 className="text-md font-medium mb-2 text-gray-700">{project.project_name} (ID: {projectId})</h4>
+                        {projectDevelopers.filter(function(p) { return p.project_id === projectId && p.developer_name !== "None"; }).length === 0 ? (
+                          <p className="text-gray-600">No developers assigned</p>
+                        ) : (
+                          <canvas id={"projectDevelopersChart_" + projectId} className="w-full"></canvas>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          {view === 'activities' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Activity Insights</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Activity Status Breakdown</h3>
+                  {activityStatus.length === 0 ? (
+                    <p className="text-gray-600">No activity status data available</p>
+                  ) : (
+                    <canvas id="activityStatusChart" className="w-full"></canvas>
+                  )}
+                </div>
+              </div>
+              <h3 className="text-lg font-medium mb-2 text-gray-700">Latest Activities by Status</h3>
+              {Object.keys(latestActivitiesByStatus).every(function(status) { return latestActivitiesByStatus[status].length === 0; }) ? (
+                <p className="text-gray-600">No activities available</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {['To_Do', 'In_Progress', 'Done'].map(function(status) {
+                    return (
+                      <div key={status}>
+                        <h4 className="text-md font-medium mb-2 text-gray-700">{status.replace('_', ' ')}</h4>
+                        {latestActivitiesByStatus[status].length === 0 ? (
+                          <p className="text-gray-600">No {status.replace('_', ' ')} activities</p>
+                        ) : (
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="bg-gray-200">
+                                <th className="p-2 text-left text-xs font-medium text-gray-700">Developer</th>
+                                <th className="p-2 text-left text-xs font-medium text-gray-700">Project</th>
+                                <th className="p-2 text-left text-xs font-medium text-gray-700">Task</th>
+                                <th className="p-2 text-left text-xs font-medium text-gray-700">Details</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {latestActivitiesByStatus[status].map(function(activity, index) {
+                                return (
+                                  <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                    <td className="p-2 text-xs text-gray-600">{getDeveloperName(activity.developer_id)}</td>
+                                    <td className="p-2 text-xs text-gray-600">{getProjectName(activity.project_id)}</td>
+                                    <td className="p-2 text-xs text-gray-600">{getTaskTitle(activity.task_id)}</td>
+                                    <td className="p-2 text-xs text-gray-600">{activity.details || '-'}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <h3 className="text-lg font-medium mb-2 mt-6 text-gray-700">Activity Heatmap</h3>
+              {dailyActivities.length === 0 ? (
+                <p className="text-gray-600">No daily activity data available</p>
+              ) : (
+                <div className="grid grid-cols-7 gap-1">
+                  {dailyActivities.map(function(day, index) {
+                    var intensity = Math.min(day.activities / 5, 1);
+                    var bgColor = 'rgba(54, 162, 235, ' + (0.2 + intensity * 0.8) + ')';
+                    return (
+                      <div
+                        key={index}
+                        className="p-2 text-center text-xs text-gray-700 rounded"
+                        style={{ backgroundColor: bgColor }}
+                        title={day.day + ': ' + day.activities + ' activities'}
+                      >
+                        {day.day.split('-')[2]}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-sm text-gray-600 mt-2">Darker shades indicate more activities on that day.</p>
+              <h3 className="text-lg font-medium mb-2 mt-6 text-gray-700">Activity Details</h3>
+              {activities.length === 0 ? (
+                <div className="text-center text-gray-600 p-4">
+                  No activities found. <a href="index.html" className="text-blue-600 hover:underline">Add an activity</a> to get started.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200">
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Developer</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Project</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Task</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Details</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Status</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Estimated Days</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activities.map(function(activity, index) {
+                        return (
+                          <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-3 text-sm text-gray-600">{getDeveloperName(activity.developer_id)}</td>
+                            <td className="p-3 text-sm text-gray-600">{getProjectName(activity.project_id)}</td>
+                            <td className="p-3 text-sm text-gray-600">{getTaskTitle(activity.task_id)}</td>
+                            <td className="p-3 text-sm text-gray-600">{activity.details || '-'}</td>
+                            <td className="p-3 text-sm text-gray-600">{activity.status ? activity.status.replace('_', ' ') : '-'}</td>
+                            <td className="p-3 text-sm text-gray-600">{activity.estimated_days || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+          {view === 'developers' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Developer Insights</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Top Developers by Activity</h3>
+                  {topDevelopers.length === 0 ? (
+                    <p className="text-gray-600">No top developers data available</p>
+                  ) : (
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-200">
+                          <th className="p-3 text-left text-sm font-medium text-gray-700">Developer</th>
+                          <th className="p-3 text-left text-sm font-medium text-gray-700">Activity Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topDevelopers.map(function(dev, index) {
+                          return (
+                            <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                              <td className="p-3 text-sm text-gray-600">{dev.name}</td>
+                              <td className="p-3 text-sm text-gray-600">{dev.activity_count}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Average Estimated Days</h3>
+                  {avgEstimatedDays.length === 0 ? (
+                    <p className="text-gray-600">No average estimated days data available</p>
+                  ) : (
+                    <canvas id="avgEstimatedDaysChart" className="w-full"></canvas>
+                  )}
+                </div>
+              </div>
+              <h3 className="text-lg font-medium mb-2 text-gray-700">Developer Task Assignments</h3>
+              {developerTasks.length === 0 ? (
+                <p className="text-gray-600">No developer task data available</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200">
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Developer</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Top 2 Tasks</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Total Tasks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {developerTasks.map(function(dev, index) {
+                        return (
+                          <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-3 text-sm text-gray-600">{dev.developer_name}</td>
+                            <td className="p-3 text-sm text-gray-600">
+                              {dev.top_tasks.length === 0 ? '-' : dev.top_tasks.map(function(task) {
+                                return (
+                                  <div key={task.task_id}>
+                                    {task.title} (ID: {task.task_id}, Activities: {task.activity_count})
+                                  </div>
+                                );
+                              })}
+                            </td>
+                            <td className="p-3 text-sm text-gray-600">{dev.total_tasks}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+          {view === 'tasks' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Task Insights</h2>
+              <h3 className="text-lg font-medium mb-2 text-gray-700">Tasks Without Activities</h3>
+              {tasksWithoutActivities.length === 0 ? (
+                <div className="text-center text-gray-600 p-4">All tasks are assigned to activities.</div>
+              ) : (
+                <div className="overflow-x-auto mb-6">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-red-100">
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Task ID</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Title</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tasksWithoutActivities.map(function(task, index) {
+                        return (
+                          <tr key={task.task_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-3 text-sm text-gray-600">{task.task_id}</td>
+                            <td className="p-3 text-sm text-gray-600">{task.title}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <h3 className="text-lg font-medium mb-2 text-gray-700">Active Tasks</h3>
+              {activeTasks.length === 0 ? (
+                <div className="text-center text-gray-600 p-4">No active tasks found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-green-100">
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Task ID</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Title</th>
+                        <th className="p-3 text-left text-sm font-medium text-gray-700">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeTasks.map(function(task, index) {
+                        return (
+                          <tr key={task.task_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-3 text-sm text-gray-600">{task.task_id}</td>
+                            <td className="p-3 text-sm text-gray-600">{task.title}</td>
+                            <td className="p-3 text-sm text-gray-600">{task.status.replace('_', ' ')}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+          {view === 'deadlines' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 text-gray-700">Upcoming Deadlines</h2>
+              {upcomingDeadlines.length === 0 ? (
+                <p className="text-gray-600">No upcoming deadlines available</p>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">July 2025</h3>
+                  <div className="grid grid-cols-7 gap-1 text-center">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(function(day) {
+                      return (
+                        <div key={day} className="p-2 text-sm font-medium text-gray-700">{day}</div>
+                      );
+                    })}
+                    {generateCalendar(upcomingDeadlines).map(function(day, index) {
+                      return (
+                        <div
+                          key={index}
+                          className={`p-2 text-sm rounded ${day && day.deadlines.length > 0 ? 'bg-blue-100 hover:bg-blue-200' : 'bg-white'} ${!day ? 'bg-gray-100' : ''}`}
+                          title={day && day.deadlines.length > 0 ? day.deadlines.map(function(d) { return d.name + ' (' + d.status + ')'; }).join('\n') : ''}
+                        >
+                          {day ? day.day : ''}
+                          {day && day.deadlines.length > 0 && (
+                            <div className="text-xs text-blue-600">
+                              {day.deadlines.map(function(d, i) {
+                                return <div key={i}>{d.name}</div>;
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    try {
+      console.log('Attempting to render React component...');
+      ReactDOM.render(<Dashboard />, document.getElementById('root'));
+      console.log('React component rendered successfully');
+    } catch (error) {
+      console.error('Error rendering React component:', error);
+      var fallback = document.getElementById('error-fallback');
+      fallback.classList.remove('hidden');
+      fallback.innerHTML = 'Failed to load dashboard: ' + error.message + '. Please check the console for details and ensure all scripts and APIs are accessible. <br><a href="index.html" class="text-blue-600 hover:underline">Go to Add Activity</a>';
+    }
+  </script>
+</body>
+</html>
