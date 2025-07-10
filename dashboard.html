@@ -167,7 +167,7 @@
       React.useEffect(function() {
         console.log('Rendering charts with view:', view);
         try {
-          // Destroy existing chart instances
+          // Destroy all existing chart instances
           Object.keys(chartRefs.current).forEach(function(key) {
             if (chartRefs.current[key]) {
               chartRefs.current[key].destroy();
@@ -175,6 +175,9 @@
               console.log('Destroyed chart:', key);
             }
           });
+
+          // Initialize chartRefs for current render
+          chartRefs.current = {};
 
           if (view === 'summary') {
             // Project Activities Bar Chart
@@ -264,28 +267,34 @@
             }
 
             // Developer Charts for Each Project
-            projectDevelopers.forEach(function(project) {
-              var ctx = document.getElementById('projectDevelopersChart_' + project.project_id) && document.getElementById('projectDevelopersChart_' + project.project_id).getContext('2d');
-              if (ctx && project.developer_name !== "None") {
-                var developers = projectDevelopers.filter(function(p) { return p.project_id === project.project_id && p.developer_name !== "None"; });
-                chartRefs.current['projectDevelopersChart_' + project.project_id] = new Chart(ctx, {
-                  type: 'bar',
-                  data: {
-                    labels: developers.map(function(d) { return d.developer_name; }),
-                    datasets: [{
-                      label: 'Activity Count',
-                      data: developers.map(function(d) { return d.activity_count; }),
-                      backgroundColor: '#36A2EB',
-                      borderColor: '#2B8AC6',
-                      borderWidth: 1
-                    }]
-                  },
-                  options: {
-                    responsive: true,
-                    plugins: { legend: { position: 'top' }, title: { display: true, text: 'Developers for ' + project.project_name, font: { size: 16 } } },
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Activities' } } }
-                  }
-                });
+            var uniqueProjectIds = [...new Set(projectDevelopers.map(function(p) { return p.project_id; }))];
+            uniqueProjectIds.forEach(function(projectId) {
+              var project = projectDevelopers.find(function(p) { return p.project_id === projectId; });
+              var canvasId = 'projectDevelopersChart_' + projectId;
+              var ctx = document.getElementById(canvasId) && document.getElementById(canvasId).getContext('2d');
+              if (ctx) {
+                var developers = projectDevelopers.filter(function(p) { return p.project_id === projectId && p.developer_name !== "None"; });
+                if (developers.length > 0) {
+                  chartRefs.current[canvasId] = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                      labels: developers.map(function(d) { return d.developer_name; }),
+                      datasets: [{
+                        label: 'Activity Count',
+                        data: developers.map(function(d) { return d.activity_count; }),
+                        backgroundColor: '#36A2EB',
+                        borderColor: '#2B8AC6',
+                        borderWidth: 1
+                      }]
+                    },
+                    options: {
+                      responsive: true,
+                      plugins: { legend: { position: 'top' }, title: { display: true, text: 'Developers for ' + project.project_name, font: { size: 16 } } },
+                      scales: { y: { beginAtZero: true, title: { display: true, text: 'Activities' } } }
+                    }
+                  });
+                  console.log('Created chart: ' + canvasId);
+                }
               }
             });
           }
@@ -357,7 +366,7 @@
           setError('Failed to render charts: ' + chartError.message);
         }
 
-        // Cleanup on unmount
+        // Cleanup on unmount or re-render
         return function() {
           Object.keys(chartRefs.current).forEach(function(key) {
             if (chartRefs.current[key]) {
@@ -366,6 +375,7 @@
               console.log('Cleaned up chart on unmount:', key);
             }
           });
+          chartRefs.current = {};
         };
       }, [view, activityStatus, projectStatus, projectPriority, avgEstimatedDays, projectActivities, projectDevelopers]);
 
