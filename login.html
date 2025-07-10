@@ -74,7 +74,7 @@
           })
           .then(data => {
             localStorage.setItem('developer_id', data.developer_id);
-            window.location.href = 'homepage.html';
+            window.location.href = 'index.html';
           })
           .catch(err => {
             setError(err.message);
