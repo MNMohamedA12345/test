@@ -42,7 +42,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Developer Homepage</title>
+  <title>Developer index</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
@@ -52,7 +52,7 @@
   <div id="root" className="w-full max-w-7xl mx-auto"></div>
   <div id="error-fallback" className="hidden text-center text-red-700 p-4"></div>
   <script type="text/babel">
-    function Homepage() {
+    function index() {
       const [developerId, setDeveloperId] = React.useState(localStorage.getItem('developer_id') || '');
       const [activities, setActivities] = React.useState([]);
       const [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
@@ -318,7 +318,14 @@
         </div>
       );
     }
-  
+
+    try {
+      ReactDOM.render(<index />, document.getElementById('root'));
+    } catch (error) {
+      const fallback = document.getElementById('error-fallback');
+      fallback.classList.remove('hidden');
+      fallback.innerHTML = 'Failed to load index: ' + error.message;
+    }
   </script>
 </body>
 </html>
