@@ -319,13 +319,7 @@
       );
     }
 
-    try {
-      ReactDOM.render(<Homepage />, document.getElementById('root'));
-    } catch (error) {
-      const fallback = document.getElementById('error-fallback');
-      fallback.classList.remove('hidden');
-      fallback.innerHTML = 'Failed to load homepage: ' + error.message;
-    }
+    
   </script>
 </body>
 </html>
