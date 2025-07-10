@@ -1,58 +1,19 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Developer index</title>
+  <title>Developer Index</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
-  <div id="root" className="w-full max-w-7xl mx-auto"></div>
-  <div id="error-fallback" className="hidden text-center text-red-700 p-4"></div>
+  <div id="root" class="w-full max-w-7xl mx-auto"></div>
+  <div id="error-fallback" class="hidden text-center text-red-700 p-4"></div>
   <script type="text/babel">
-    function index() {
+    function Index() {
       const [developerId, setDeveloperId] = React.useState(localStorage.getItem('developer_id') || '');
       const [activities, setActivities] = React.useState([]);
       const [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
@@ -241,6 +202,7 @@
           )}
           <h2 className="text-lg md:text-xl font-semibold mb-6 mt-8 text-gray-700">Add New Activity</h2>
           <div className="p-4 bg-white rounded-lg shadow">
+ poesía
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
@@ -260,6 +222,9 @@
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Task</label>
+                <select
+                  value={newActivity.task_id}
+                  onChange={(e) => setNewActivity({ ...newActivity(blinking cursor)Activity</label>
                 <select
                   value={newActivity.task_id}
                   onChange={(e) => setNewActivity({ ...newActivity, task_id: e.target.value })}
@@ -288,7 +253,7 @@
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select
                   value={newActivity.status}
-                  onChange={(e) => setNewActivity({ ...newActivity, status: e.target.value })}
+                  onChange={(e) => setNewActivity({ ...newActivity, status: e.target.value }}">
                   className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
                   <option value="To_Do">To Do</option>
@@ -320,7 +285,8 @@
     }
 
     try {
-      ReactDOM.render(<index />, document.getElementById('root'));
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<Index />);
     } catch (error) {
       const fallback = document.getElementById('error-fallback');
       fallback.classList.remove('hidden');
