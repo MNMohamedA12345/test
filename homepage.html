@@ -1,0 +1,331 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Developer Homepage</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
+  <div id="root" className="w-full max-w-7xl mx-auto"></div>
+  <div id="error-fallback" className="hidden text-center text-red-700 p-4"></div>
+  <script type="text/babel">
+    function Homepage() {
+      const [developerId, setDeveloperId] = React.useState(localStorage.getItem('developer_id') || '');
+      const [activities, setActivities] = React.useState([]);
+      const [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
+      const [newActivity, setNewActivity] = React.useState({
+        project_id: '',
+        task_id: '',
+        details: '',
+        status: 'To_Do',
+        estimated_days: ''
+      });
+      const [error, setError] = React.useState('');
+      const [success, setSuccess] = React.useState('');
+      const [loading, setLoading] = React.useState(false);
+
+      // Fetch developer's activities and dropdown data
+      React.useEffect(() => {
+        if (!developerId) {
+          window.location.href = 'login.html';
+          return;
+        }
+
+        // Fetch activities
+        fetch(`https://fastapi.engineeringdevelopment.online/activities?developer_id=${developerId}`)
+          .then(response => {
+            if (!response.ok) throw new Error('Failed to load activities');
+            return response.json();
+          })
+          .then(data => setActivities(data))
+          .catch(err => setError(err.message));
+
+        // Fetch dropdown data
+        fetch('https://fastapi.engineeringdevelopment.online/dropdown-data')
+          .then(response => {
+            if (!response.ok) throw new Error('Failed to load dropdown data');
+            return response.json();
+          })
+          .then(data => setDropdownData(data))
+          .catch(err => setError(err.message));
+      }, [developerId]);
+
+      // Handle status update
+      const updateStatus = (activityId, newStatus) => {
+        setLoading(true);
+        fetch(`https://fastapi.engineeringdevelopment.online/activities/${activityId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        })
+          .then(response => {
+            if (!response.ok) throw new Error('Failed to update status');
+            return response.json();
+          })
+          .then(() => {
+            setActivities(activities.map(activity =>
+              activity.activity_id === activityId ? { ...activity, status: newStatus } : activity
+            ));
+            setSuccess('Status updated successfully');
+            setTimeout(() => setSuccess(''), 3000);
+          })
+          .catch(err => setError(err.message))
+          .finally(() => setLoading(false));
+      };
+
+      // Handle new activity submission
+      const handleAddActivity = (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setLoading(true);
+
+        const activityData = {
+          developer_id: parseInt(developerId),
+          project_id: parseInt(newActivity.project_id),
+          task_id: parseInt(newActivity.task_id),
+          details: newActivity.details || null,
+          status: newActivity.status,
+          estimated_days: parseInt(newActivity.estimated_days) || null
+        };
+
+        fetch('https://fastapi.engineeringdevelopment.online/activities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(activityData)
+        })
+          .then(response => {
+            if (!response.ok) throw new Error('Failed to add activity');
+            return response.json();
+          })
+          .then(data => {
+            setActivities([...activities, data]);
+            setSuccess('Activity added successfully');
+            setNewActivity({
+              project_id: '',
+              task_id: '',
+              details: '',
+              status: 'To_Do',
+              estimated_days: ''
+            });
+            setTimeout(() => setSuccess(''), 3000);
+          })
+          .catch(err => setError(err.message))
+          .finally(() => setLoading(false));
+      };
+
+      // Handle logout
+      const handleLogout = () => {
+        localStorage.removeItem('developer_id');
+        window.location.href = 'login.html';
+      };
+
+      // Get names for display
+      const getProjectName = (id) => {
+        const project = dropdownData.projects.find(p => p.project_id === id);
+        return project ? `${project.name} (ID: ${project.project_id})` : `Project ${id}`;
+      };
+
+      const getTaskTitle = (id) => {
+        const task = dropdownData.tasks.find(t => t.task_id === id);
+        return task ? `${task.title} (ID: ${task.task_id})` : `Task ${id}`;
+      };
+
+      return (
+        <div className="bg-white rounded-lg shadow-md p-6 sm:p-8 md:p-10">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
+              My Activities
+            </h1>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Logout
+            </button>
+          </div>
+          {error && (
+            <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-6 p-4 bg-green-100 text-green-700 rounded-lg">
+              {success}
+            </div>
+          )}
+          <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">Your Activities</h2>
+          {activities.length === 0 ? (
+            <p className="text-gray-600 mb-6">No activities assigned to you.</p>
+          ) : (
+            <div className="p-4 bg-white rounded-lg shadow mb-8">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-200">
+                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Project</th>
+                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task</th>
+                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
+                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
+                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Estimated Days</th>
+                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activities.map((activity, index) => (
+                    <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getProjectName(activity.project_id)}</td>
+                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getTaskTitle(activity.task_id)}</td>
+                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.details || '-'}</td>
+                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.status.replace('_', ' ')}</td>
+                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
+                      <td className="p-2 md:p-3 text-xs md:text-sm">
+                        <select
+                          value={activity.status}
+                          onChange={(e) => updateStatus(activity.activity_id, e.target.value)}
+                          className="p-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                          disabled={loading}
+                        >
+                          <option value="To_Do">To Do</option>
+                          <option value="In_Progress">In Progress</option>
+                          <option value="Done">Done</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <h2 className="text-lg md:text-xl font-semibold mb-6 mt-8 text-gray-700">Add New Activity</h2>
+          <div className="p-4 bg-white rounded-lg shadow">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                <select
+                  value={newActivity.project_id}
+                  onChange={(e) => setNewActivity({ ...newActivity, project_id: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  required
+                >
+                  <option value="">Select Project</option>
+                  {dropdownData.projects.map(project => (
+                    <option key={project.project_id} value={project.project_id}>
+                      {project.name} (ID: {project.project_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Task</label>
+                <select
+                  value={newActivity.task_id}
+                  onChange={(e) => setNewActivity({ ...newActivity, task_id: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  required
+                >
+                  <option value="">Select Task</option>
+                  {dropdownData.tasks.map(task => (
+                    <option key={task.task_id} value={task.task_id}>
+                      {task.title} (ID: {task.task_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Details</label>
+                <input
+                  type="text"
+                  value={newActivity.details}
+                  onChange={(e) => setNewActivity({ ...newActivity, details: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Enter activity details"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={newActivity.status}
+                  onChange={(e) => setNewActivity({ ...newActivity, status: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="To_Do">To Do</option>
+                  <option value="In_Progress">In Progress</option>
+                  <option value="Done">Done</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
+                <input
+                  type="number"
+                  value={newActivity.estimated_days}
+                  onChange={(e) => setNewActivity({ ...newActivity, estimated_days: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Enter estimated days"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleAddActivity}
+              disabled={loading}
+              className={`mt-6 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {loading ? 'Adding...' : 'Add Activity'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    try {
+      ReactDOM.render(<Homepage />, document.getElementById('root'));
+    } catch (error) {
+      const fallback = document.getElementById('error-fallback');
+      fallback.classList.remove('hidden');
+      fallback.innerHTML = 'Failed to load homepage: ' + error.message;
+    }
+  </script>
+</body>
+</html>
