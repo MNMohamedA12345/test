@@ -23,11 +23,15 @@
       topDevelopers: [{ name: "Laila Ahmed", activity_count: 1 }, { name: "Mahmoud Nasser", activity_count: 1 }],
       tasksWithoutActivities: [{ task_id: 1, title: "Set up environment" }, { task_id: 3, title: "creating the adding UI" }],
       projectPriority: [{ status: "Planning", priority: "Unknown", count: 2 }, { status: "In_Progress", priority: "Unknown", count: 1 }],
-      avgEstimatedDays: [{ name: "Laila Ahmed", avg_estimated: 5655 }, { name: "Mahmoud Nasser", avg_estimated: 5 }],
-      upcomingDeadlines: [{ name: "UI design", delivery_date: "2025-07-10", status: "Planning" }],
+      avgEstimatedDays: [{ name: "Laila Ahmed", avg_estimated: 5 }, { name: "Mahmoud Nasser", avg_estimated: 5 }],
+      upcomingDeadlines: [
+        { name: "UI design", delivery_date: "2025-07-10", status: "Planning" },
+        { name: "Dashboard test", delivery_date: "2025-07-15", status: "In_Progress" },
+        { name: "nvnvgh", delivery_date: "2025-07-20", status: "Planning" }
+      ],
       projectActivityStatus: { active: 3, idle: 1 },
       activities: [
-        {"activity_id":1,"developer_id":1,"project_id":3,"task_id":5,"details":"jhgjgjghjh","status":"To_Do","estimated_days":5655},
+        {"activity_id":1,"developer_id":1,"project_id":3,"task_id":5,"details":"jhgjgjghjh","status":"To_Do","estimated_days":5},
         {"activity_id":2,"developer_id":6,"project_id":2,"task_id":5,"details":null,"status":"To_Do","estimated_days":5}
       ],
       dropdownData: {
@@ -69,7 +73,7 @@
       latestActivitiesByStatus: {
         "To_Do": [
           {"activity_id":2,"developer_id":6,"project_id":2,"task_id":5,"details":null,"status":"To_Do","estimated_days":5},
-          {"activity_id":1,"developer_id":1,"project_id":3,"task_id":5,"details":"jhgjgjghjh","status":"To_Do","estimated_days":5655}
+          {"activity_id":1,"developer_id":1,"project_id":3,"task_id":5,"details":"jhgjgjghjh","status":"To_Do","estimated_days":5}
         ],
         "In_Progress": [],
         "Done": []
@@ -116,6 +120,13 @@
       var [developerTasks, setDeveloperTasks] = React.useState([]);
       var [activeTasks, setActiveTasks] = React.useState([]);
       var [error, setError] = React.useState(null);
+      // Activity filters
+      var [filterDeveloper, setFilterDeveloper] = React.useState('');
+      var [filterStatus, setFilterStatus] = React.useState('');
+      var [filterTask, setFilterTask] = React.useState('');
+      var [filterProject, setFilterProject] = React.useState('');
+      // Calendar month/year
+      var [calendarDate, setCalendarDate] = React.useState(new Date());
       // Store chart instances
       var chartRefs = React.useRef({});
 
@@ -175,42 +186,45 @@
               console.log('Destroyed chart:', key);
             }
           });
-
-          // Initialize chartRefs for current render
           chartRefs.current = {};
 
           if (view === 'summary') {
-            // Project Activities Bar Chart
-            var projectActivitiesCtx = document.getElementById('projectActivitiesChart') && document.getElementById('projectActivitiesChart').getContext('2d');
-            if (projectActivitiesCtx && projectActivities.length > 0) {
-              var projectIds = [...new Set(projectActivities.map(function(p) { return p.project_id; }))];
-              var statuses = ['To_Do', 'In_Progress', 'Done', 'None'];
-              var datasets = statuses.map(function(status) {
-                return {
-                  label: status.replace('_', ' '),
-                  data: projectIds.map(function(id) {
-                    var item = projectActivities.find(function(p) { return p.project_id === id && p.status === status; });
-                    return item ? item.activity_count : 0;
-                  }),
-                  backgroundColor: status === 'To_Do' ? '#FF6384' : status === 'In_Progress' ? '#36A2EB' : status === 'Done' ? '#4BC0C0' : '#D3D3D3'
-                };
-              });
-              chartRefs.current.projectActivitiesChart = new Chart(projectActivitiesCtx, {
-                type: 'bar',
-                data: {
-                  labels: projectIds.map(function(id) {
-                    var project = projectActivities.find(function(p) { return p.project_id === id; });
-                    return project ? project.name : 'Project ' + id;
-                  }),
-                  datasets: datasets
-                },
-                options: {
-                  responsive: true,
-                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Activities per Project', font: { size: 16 } } },
-                  scales: { y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Activity Count' } }, x: { stacked: true } }
-                }
-              });
-            }
+            // Pie Chart for Each Project
+            var uniqueProjectIds = [...new Set(projectActivities.map(function(p) { return p.project_id; }))];
+            uniqueProjectIds.forEach(function(projectId) {
+              var canvasId = 'projectPieChart_' + projectId;
+              var ctx = document.getElementById(canvasId) && document.getElementById(canvasId).getContext('2d');
+              if (ctx) {
+                var project = projectActivities.find(function(p) { return p.project_id === projectId; });
+                var activities = projectActivities.filter(function(p) { return p.project_id === projectId; });
+                var statuses = ['To_Do', 'In_Progress', 'Done', 'None'];
+                var data = statuses.map(function(status) {
+                  var item = activities.find(function(a) { return a.status === status; });
+                  return item ? item.activity_count : 0;
+                });
+                chartRefs.current[canvasId] = new Chart(ctx, {
+                  type: 'pie',
+                  data: {
+                    labels: statuses.map(function(s) { return s.replace('_', ' '); }),
+                    datasets: [{
+                      data: data,
+                      backgroundColor: ['#FF6384', '#36A2EB', '#4BC0C0', '#D3D3D3'],
+                      borderColor: '#fff',
+                      borderWidth: 2
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: 'top' },
+                      title: { display: true, text: project ? project.name : 'Project ' + projectId, font: { size: 14 } }
+                    }
+                  }
+                });
+                console.log('Created chart: ' + canvasId);
+              }
+            });
           }
 
           if (view === 'projects') {
@@ -231,8 +245,9 @@
                 },
                 options: {
                   responsive: true,
-                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Status Breakdown', font: { size: 16 } } },
-                  scales: { y: { beginAtZero: true, title: { display: true, text: 'Projects' } } }
+                  maintainAspectRatio: false,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Status Breakdown', font: { size: 14 } } },
+                  scales: { y: { beginAtZero: true, title: { display: true, text: 'Projects', font: { size: 12 } } } }
                 }
               });
             }
@@ -260,8 +275,12 @@
                 },
                 options: {
                   responsive: true,
-                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Priority by Status', font: { size: 16 } } },
-                  scales: { y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Projects' } }, x: { stacked: true } }
+                  maintainAspectRatio: false,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Priority by Status', font: { size: 14 } } },
+                  scales: { 
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Projects', font: { size: 12 } } }, 
+                    x: { stacked: true } 
+                  }
                 }
               });
             }
@@ -289,8 +308,12 @@
                     },
                     options: {
                       responsive: true,
-                      plugins: { legend: { position: 'top' }, title: { display: true, text: 'Developers for ' + project.project_name, font: { size: 16 } } },
-                      scales: { y: { beginAtZero: true, title: { display: true, text: 'Activities' } } }
+                      maintainAspectRatio: false,
+                      plugins: { 
+                        legend: { position: 'top', labels: { font: { size: 12 } } }, 
+                        title: { display: true, text: 'Developers for ' + project.project_name, font: { size: 14 } } 
+                      },
+                      scales: { y: { beginAtZero: true, title: { display: true, text: 'Activities', font: { size: 12 } } } }
                     }
                   });
                   console.log('Created chart: ' + canvasId);
@@ -316,7 +339,11 @@
                 },
                 options: {
                   responsive: true,
-                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Activity Status Breakdown', font: { size: 16 } } }
+                  maintainAspectRatio: false,
+                  plugins: { 
+                    legend: { position: 'top', labels: { font: { size: 12 } } }, 
+                    title: { display: true, text: 'Activity Status Breakdown', font: { size: 14 } } 
+                  }
                 }
               });
             }
@@ -341,9 +368,10 @@
                 },
                 options: {
                   responsive: true,
+                  maintainAspectRatio: false,
                   plugins: {
-                    legend: { position: 'top' },
-                    title: { display: true, text: 'Average Estimated Days per Developer', font: { size: 16 } },
+                    legend: { position: 'top', labels: { font: { size: 12 } } },
+                    title: { display: true, text: 'Average Estimated Days per Developer', font: { size: 14 } },
                     tooltip: {
                       callbacks: {
                         label: function(context) {
@@ -354,7 +382,7 @@
                     }
                   },
                   scales: {
-                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Days (Capped at 100)' } }
+                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Days (Capped at 100)', font: { size: 12 } } }
                   }
                 }
               });
@@ -366,7 +394,6 @@
           setError('Failed to render charts: ' + chartError.message);
         }
 
-        // Cleanup on unmount or re-render
         return function() {
           Object.keys(chartRefs.current).forEach(function(key) {
             if (chartRefs.current[key]) {
@@ -394,11 +421,21 @@
         return task ? task.title + ' (ID: ' + task.task_id + ')' : 'Task ' + id;
       }
 
+      // Filter activities based on selected filters
+      function getFilteredActivities() {
+        return activities.filter(function(activity) {
+          var matchesDeveloper = filterDeveloper ? activity.developer_id === parseInt(filterDeveloper) : true;
+          var matchesStatus = filterStatus && filterStatus !== 'All' ? activity.status === filterStatus : true;
+          var matchesTask = filterTask ? activity.task_id === parseInt(filterTask) : true;
+          var matchesProject = filterProject ? activity.project_id === parseInt(filterProject) : true;
+          return matchesDeveloper && matchesStatus && matchesTask && matchesProject;
+        });
+      }
+
       // Generate calendar for deadlines
       function generateCalendar(deadlines) {
-        var today = new Date('2025-07-08'); // Set to current date for testing
-        var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        var monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        var monthStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
+        var monthEnd = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0);
         var daysInMonth = monthEnd.getDate();
         var firstDay = monthStart.getDay();
         var calendarDays = [];
@@ -410,7 +447,7 @@
 
         // Add days of the month
         for (var day = 1; day <= daysInMonth; day++) {
-          var dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          var dateStr = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           var dayDeadlines = deadlines.filter(function(d) { return d.delivery_date === dateStr; });
           calendarDays.push({ day: day, deadlines: dayDeadlines });
         }
@@ -418,16 +455,29 @@
         return calendarDays;
       }
 
+      // Handle month navigation
+      function changeMonth(delta) {
+        setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + delta, 1));
+      }
+
+      // Reset filters
+      function resetFilters() {
+        setFilterDeveloper('');
+        setFilterStatus('');
+        setFilterTask('');
+        setFilterProject('');
+      }
+
       console.log('Rendering Dashboard with view:', view, 'error:', error);
 
       return (
-        <div className="bg-white rounded-lg shadow-md p-6 sm:p-8">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 md:p-8">
           <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-0">Professional Activities Dashboard</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 mb-4 sm:mb-0">Professional Activities Dashboard</h1>
             <select
               value={view}
               onChange={function(e) { setView(e.target.value); }}
-              className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto"
             >
               <option value="summary">Summary</option>
               <option value="projects">Projects</option>
@@ -444,44 +494,44 @@
           )}
           {view === 'summary' && (
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Summary</h2>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Summary</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div className="bg-blue-100 p-4 rounded-lg shadow">
-                  <h3 className="text-lg font-medium text-gray-700">Total Developers</h3>
-                  <p className="text-2xl font-bold text-blue-600">{summary.total_developers || '0'}</p>
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Developers</h3>
+                  <p className="text-xl md:text-2xl font-bold text-blue-600">{summary.total_developers || '0'}</p>
                 </div>
                 <div className="bg-green-100 p-4 rounded-lg shadow">
-                  <h3 className="text-lg font-medium text-gray-700">Total Projects</h3>
-                  <p className="text-2xl font-bold text-green-600">{summary.total_projects || '0'}</p>
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Projects</h3>
+                  <p className="text-xl md:text-2xl font-bold text-green-600">{summary.total_projects || '0'}</p>
                 </div>
                 <div className="bg-yellow-100 p-4 rounded-lg shadow">
-                  <h3 className="text-lg font-medium text-gray-700">Total Tasks</h3>
-                  <p className="text-2xl font-bold text-yellow-600">{summary.total_tasks || '0'}</p>
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Tasks</h3>
+                  <p className="text-xl md:text-2xl font-bold text-yellow-600">{summary.total_tasks || '0'}</p>
                 </div>
                 <div className="bg-purple-100 p-4 rounded-lg shadow">
-                  <h3 className="text-lg font-medium text-gray-700">Total Activities</h3>
-                  <p className="text-2xl font-bold text-purple-600">{summary.total_activities || '0'}</p>
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Activities</h3>
+                  <p className="text-xl md:text-2xl font-bold text-purple-600">{summary.total_activities || '0'}</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">Latest 4 Projects</h3>
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Latest 4 Projects</h3>
                   {latestProjects.length === 0 ? (
                     <p className="text-gray-600">No projects available</p>
                   ) : (
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-gray-200">
-                          <th className="p-3 text-left text-sm font-medium text-gray-700">Project</th>
-                          <th className="p-3 text-left text-sm font-medium text-gray-700">Status</th>
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Project</th>
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {latestProjects.map(function(project, index) {
                           return (
                             <tr key={project.project_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                              <td className="p-3 text-sm text-gray-600">{project.name} (ID: {project.project_id})</td>
-                              <td className="p-3 text-sm text-gray-600">{project.status}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.name} (ID: {project.project_id})</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.status}</td>
                             </tr>
                           );
                         })}
@@ -490,11 +540,20 @@
                   )}
                 </div>
                 <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">Activities per Project</h3>
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Activities per Project</h3>
                   {projectActivities.length === 0 ? (
                     <p className="text-gray-600">No project activity data available</p>
                   ) : (
-                    <canvas id="projectActivitiesChart" className="w-full"></canvas>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {[...new Set(projectActivities.map(function(p) { return p.project_id; }))].map(function(projectId) {
+                        var project = projectActivities.find(function(p) { return p.project_id === projectId; });
+                        return (
+                          <div key={projectId} className="w-full h-64">
+                            <canvas id={"projectPieChart_" + projectId} className="w-full h-full"></canvas>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
@@ -502,39 +561,39 @@
           )}
           {view === 'projects' && (
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Project Insights</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">Project Status Breakdown</h3>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Project Insights</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Project Status Breakdown</h3>
                   {projectStatus.length === 0 ? (
                     <p className="text-gray-600">No project status data available</p>
                   ) : (
-                    <canvas id="projectStatusChart" className="w-full"></canvas>
+                    <canvas id="projectStatusChart" className="w-full h-full"></canvas>
                   )}
                 </div>
-                <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">Project Priority by Status</h3>
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Project Priority by Status</h3>
                   {projectPriority.length === 0 ? (
                     <p className="text-gray-600">No project priority data available</p>
                   ) : (
-                    <canvas id="projectPriorityChart" className="w-full"></canvas>
+                    <canvas id="projectPriorityChart" className="w-full h-full"></canvas>
                   )}
                 </div>
               </div>
-              <h3 className="text-lg font-medium mb-2 mt-6 text-gray-700">Developers per Project</h3>
+              <h3 className="text-base md:text-lg font-medium mb-2 mt-4 md:mt-6 text-gray-700">Developers per Project</h3>
               {projectDevelopers.length === 0 ? (
                 <p className="text-gray-600">No developer data available</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                   {[...new Set(projectDevelopers.map(function(p) { return p.project_id; }))].map(function(projectId) {
                     var project = projectDevelopers.find(function(p) { return p.project_id === projectId; });
                     return (
-                      <div key={projectId}>
-                        <h4 className="text-md font-medium mb-2 text-gray-700">{project.project_name} (ID: {projectId})</h4>
+                      <div key={projectId} className="w-full h-64">
+                        <h4 className="text-sm md:text-md font-medium mb-2 text-gray-700">{project.project_name} (ID: {projectId})</h4>
                         {projectDevelopers.filter(function(p) { return p.project_id === projectId && p.developer_name !== "None"; }).length === 0 ? (
                           <p className="text-gray-600">No developers assigned</p>
                         ) : (
-                          <canvas id={"projectDevelopersChart_" + projectId} className="w-full"></canvas>
+                          <canvas id={"projectDevelopersChart_" + projectId} className="w-full h-full"></canvas>
                         )}
                       </div>
                     );
@@ -545,18 +604,18 @@
           )}
           {view === 'activities' && (
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Activity Insights</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">Activity Status Breakdown</h3>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Activity Insights</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Activity Status Breakdown</h3>
                   {activityStatus.length === 0 ? (
                     <p className="text-gray-600">No activity status data available</p>
                   ) : (
-                    <canvas id="activityStatusChart" className="w-full"></canvas>
+                    <canvas id="activityStatusChart" className="w-full h-full"></canvas>
                   )}
                 </div>
               </div>
-              <h3 className="text-lg font-medium mb-2 text-gray-700">Latest Activities by Status</h3>
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Latest Activities by Status</h3>
               {Object.keys(latestActivitiesByStatus).every(function(status) { return latestActivitiesByStatus[status].length === 0; }) ? (
                 <p className="text-gray-600">No activities available</p>
               ) : (
@@ -564,7 +623,7 @@
                   {['To_Do', 'In_Progress', 'Done'].map(function(status) {
                     return (
                       <div key={status}>
-                        <h4 className="text-md font-medium mb-2 text-gray-700">{status.replace('_', ' ')}</h4>
+                        <h4 className="text-sm md:text-md font-medium mb-2 text-gray-700">{status.replace('_', ' ')}</h4>
                         {latestActivitiesByStatus[status].length === 0 ? (
                           <p className="text-gray-600">No {status.replace('_', ' ')} activities</p>
                         ) : (
@@ -596,7 +655,103 @@
                   })}
                 </div>
               )}
-              <h3 className="text-lg font-medium mb-2 mt-6 text-gray-700">Activity Heatmap</h3>
+              <h3 className="text-base md:text-lg font-medium mb-2 mt-4 md:mt-6 text-gray-700">Activity Details</h3>
+              <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <select
+                  value={filterDeveloper}
+                  onChange={function(e) { setFilterDeveloper(e.target.value); }}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Developers</option>
+                  {dropdownData.developers.map(function(dev) {
+                    return (
+                      <option key={dev.developer_id} value={dev.developer_id}>
+                        {dev.name} (ID: {dev.developer_id})
+                      </option>
+                    );
+                  })}
+                </select>
+                <select
+                  value={filterStatus}
+                  onChange={function(e) { setFilterStatus(e.target.value); }}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="All">All</option>
+                  <option value="To_Do">To Do</option>
+                  <option value="In_Progress">In Progress</option>
+                  <option value="Done">Done</option>
+                </select>
+                <select
+                  value={filterTask}
+                  onChange={function(e) { setFilterTask(e.target.value); }}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Tasks</option>
+                  {dropdownData.tasks.map(function(task) {
+                    return (
+                      <option key={task.task_id} value={task.task_id}>
+                        {task.title} (ID: {task.task_id})
+                      </option>
+                    );
+                  })}
+                </select>
+                <select
+                  value={filterProject}
+                  onChange={function(e) { setFilterProject(e.target.value); }}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Projects</option>
+                  {dropdownData.projects.map(function(project) {
+                    return (
+                      <option key={project.project_id} value={project.project_id}>
+                        {project.name} (ID: {project.project_id})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <button
+                onClick={resetFilters}
+                className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Clear Filters
+              </button>
+              {getFilteredActivities().length === 0 ? (
+                <div className="text-center text-gray-600 p-4">
+                  No activities match the selected filters. <a href="index.html" className="text-blue-600 hover:underline">Add an activity</a> to get started.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200">
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Developer</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Project</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Estimated Days</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getFilteredActivities().map(function(activity, index) {
+                        return (
+                          <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getDeveloperName(activity.developer_id)}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getProjectName(activity.project_id)}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getTaskTitle(activity.task_id)}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.details || '-'}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.status ? activity.status.replace('_', ' ') : '-'}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <h3 className="text-base md:text-lg font-medium mb-2 mt-4 md:mt-6 text-gray-700">Activity Heatmap</h3>
               {dailyActivities.length === 0 ? (
                 <p className="text-gray-600">No daily activity data available</p>
               ) : (
@@ -617,66 +772,31 @@
                   })}
                 </div>
               )}
-              <p className="text-sm text-gray-600 mt-2">Darker shades indicate more activities on that day.</p>
-              <h3 className="text-lg font-medium mb-2 mt-6 text-gray-700">Activity Details</h3>
-              {activities.length === 0 ? (
-                <div className="text-center text-gray-600 p-4">
-                  No activities found. <a href="index.html" className="text-blue-600 hover:underline">Add an activity</a> to get started.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-200">
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Developer</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Project</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Task</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Details</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Status</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Estimated Days</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activities.map(function(activity, index) {
-                        return (
-                          <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                            <td className="p-3 text-sm text-gray-600">{getDeveloperName(activity.developer_id)}</td>
-                            <td className="p-3 text-sm text-gray-600">{getProjectName(activity.project_id)}</td>
-                            <td className="p-3 text-sm text-gray-600">{getTaskTitle(activity.task_id)}</td>
-                            <td className="p-3 text-sm text-gray-600">{activity.details || '-'}</td>
-                            <td className="p-3 text-sm text-gray-600">{activity.status ? activity.status.replace('_', ' ') : '-'}</td>
-                            <td className="p-3 text-sm text-gray-600">{activity.estimated_days || '-'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <p className="text-xs md:text-sm text-gray-600 mt-2">Darker shades indicate more activities on that day.</p>
             </div>
           )}
           {view === 'developers' && (
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Developer Insights</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">Top Developers by Activity</h3>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Developer Insights</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Top Developers by Activity</h3>
                   {topDevelopers.length === 0 ? (
                     <p className="text-gray-600">No top developers data available</p>
                   ) : (
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-gray-200">
-                          <th className="p-3 text-left text-sm font-medium text-gray-700">Developer</th>
-                          <th className="p-3 text-left text-sm font-medium text-gray-700">Activity Count</th>
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Developer</th>
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Activity Count</th>
                         </tr>
                       </thead>
                       <tbody>
                         {topDevelopers.map(function(dev, index) {
                           return (
                             <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                              <td className="p-3 text-sm text-gray-600">{dev.name}</td>
-                              <td className="p-3 text-sm text-gray-600">{dev.activity_count}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.name}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.activity_count}</td>
                             </tr>
                           );
                         })}
@@ -684,16 +804,16 @@
                     </table>
                   )}
                 </div>
-                <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">Average Estimated Days</h3>
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Average Estimated Days</h3>
                   {avgEstimatedDays.length === 0 ? (
                     <p className="text-gray-600">No average estimated days data available</p>
                   ) : (
-                    <canvas id="avgEstimatedDaysChart" className="w-full"></canvas>
+                    <canvas id="avgEstimatedDaysChart" className="w-full h-full"></canvas>
                   )}
                 </div>
               </div>
-              <h3 className="text-lg font-medium mb-2 text-gray-700">Developer Task Assignments</h3>
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Developer Task Assignments</h3>
               {developerTasks.length === 0 ? (
                 <p className="text-gray-600">No developer task data available</p>
               ) : (
@@ -701,17 +821,17 @@
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-gray-200">
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Developer</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Top 2 Tasks</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Total Tasks</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Developer</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Top 2 Tasks</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Total Tasks</th>
                       </tr>
                     </thead>
                     <tbody>
                       {developerTasks.map(function(dev, index) {
                         return (
                           <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                            <td className="p-3 text-sm text-gray-600">{dev.developer_name}</td>
-                            <td className="p-3 text-sm text-gray-600">
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.developer_name}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">
                               {dev.top_tasks.length === 0 ? '-' : dev.top_tasks.map(function(task) {
                                 return (
                                   <div key={task.task_id}>
@@ -720,7 +840,7 @@
                                 );
                               })}
                             </td>
-                            <td className="p-3 text-sm text-gray-600">{dev.total_tasks}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.total_tasks}</td>
                           </tr>
                         );
                       })}
@@ -732,8 +852,8 @@
           )}
           {view === 'tasks' && (
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Task Insights</h2>
-              <h3 className="text-lg font-medium mb-2 text-gray-700">Tasks Without Activities</h3>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Task Insights</h2>
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Tasks Without Activities</h3>
               {tasksWithoutActivities.length === 0 ? (
                 <div className="text-center text-gray-600 p-4">All tasks are assigned to activities.</div>
               ) : (
@@ -741,16 +861,16 @@
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-red-100">
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Task ID</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Title</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task ID</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Title</th>
                       </tr>
                     </thead>
                     <tbody>
                       {tasksWithoutActivities.map(function(task, index) {
                         return (
                           <tr key={task.task_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                            <td className="p-3 text-sm text-gray-600">{task.task_id}</td>
-                            <td className="p-3 text-sm text-gray-600">{task.title}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.task_id}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.title}</td>
                           </tr>
                         );
                       })}
@@ -758,7 +878,7 @@
                   </table>
                 </div>
               )}
-              <h3 className="text-lg font-medium mb-2 text-gray-700">Active Tasks</h3>
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Active Tasks</h3>
               {activeTasks.length === 0 ? (
                 <div className="text-center text-gray-600 p-4">No active tasks found.</div>
               ) : (
@@ -766,18 +886,18 @@
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-green-100">
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Task ID</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Title</th>
-                        <th className="p-3 text-left text-sm font-medium text-gray-700">Status</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task ID</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Title</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {activeTasks.map(function(task, index) {
                         return (
                           <tr key={task.task_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                            <td className="p-3 text-sm text-gray-600">{task.task_id}</td>
-                            <td className="p-3 text-sm text-gray-600">{task.title}</td>
-                            <td className="p-3 text-sm text-gray-600">{task.status.replace('_', ' ')}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.task_id}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.title}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.status.replace('_', ' ')}</td>
                           </tr>
                         );
                       })}
@@ -789,30 +909,46 @@
           )}
           {view === 'deadlines' && (
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-gray-700">Upcoming Deadlines</h2>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Upcoming Deadlines</h2>
               {upcomingDeadlines.length === 0 ? (
                 <p className="text-gray-600">No upcoming deadlines available</p>
               ) : (
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-medium mb-2 text-gray-700">July 2025</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <button
+                      onClick={function() { changeMonth(-1); }}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Previous
+                    </button>
+                    <h3 className="text-base md:text-lg font-medium text-gray-700">
+                      {calendarDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={function() { changeMonth(1); }}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Next
+                    </button>
+                  </div>
                   <div className="grid grid-cols-7 gap-1 text-center">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(function(day) {
                       return (
-                        <div key={day} className="p-2 text-sm font-medium text-gray-700">{day}</div>
+                        <div key={day} className="p-2 text-xs md:text-sm font-medium text-gray-700">{day}</div>
                       );
                     })}
                     {generateCalendar(upcomingDeadlines).map(function(day, index) {
                       return (
                         <div
                           key={index}
-                          className={`p-2 text-sm rounded ${day && day.deadlines.length > 0 ? 'bg-blue-100 hover:bg-blue-200' : 'bg-white'} ${!day ? 'bg-gray-100' : ''}`}
+                          className={`p-2 text-xs md:text-sm rounded ${day && day.deadlines.length > 0 ? 'bg-blue-100 hover:bg-blue-200' : 'bg-white'} ${!day ? 'bg-gray-100' : ''}`}
                           title={day && day.deadlines.length > 0 ? day.deadlines.map(function(d) { return d.name + ' (' + d.status + ')'; }).join('\n') : ''}
                         >
                           {day ? day.day : ''}
                           {day && day.deadlines.length > 0 && (
-                            <div className="text-xs text-blue-600">
+                            <div className="text-xs text-blue-600 mt-1">
                               {day.deadlines.map(function(d, i) {
-                                return <div key={i}>{d.name}</div>;
+                                return <div key={i} className="truncate">{d.name}</div>;
                               })}
                             </div>
                           )}
