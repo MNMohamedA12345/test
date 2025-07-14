@@ -1,4 +1,43 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -92,6 +131,7 @@
         var fetchData = async function() {
           setLoading(true);
           try {
+            // Fetch permissions
             var permResponse = await fetch(API_BASE_URL + '/me?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
             if (!permResponse.ok) {
               const errorText = await permResponse.text();
@@ -103,6 +143,8 @@
             }
             setPermissions(permData.permissions || 'low');
             localStorage.setItem('permissions', permData.permissions || 'low');
+
+            // Fetch activities
             var actResponse = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
             if (!actResponse.ok) {
               const errorText = await actResponse.text();
@@ -110,15 +152,53 @@
             }
             var actData = await actResponse.json();
             setActivities(Array.isArray(actData) ? actData : []);
+
+            // Fetch projects
+            var projResponse = await fetch(API_BASE_URL + '/projects?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
+            if (!projResponse.ok) {
+              const errorText = await projResponse.text();
+              throw new Error('Failed to load projects: ' + (errorText || projResponse.statusText));
+            }
+            var projData = await projResponse.json();
+            var normalizedProjects = (projData || []).map(function(project) {
+              return {
+                project_id: project.project_id,
+                name: project.name || '',
+                status: project.status || 'Planning',
+                delivery_date: project.delivery_date || null,
+                priority: project.priority || null
+              };
+            });
+            setProjects(normalizedProjects);
+
+            // Fetch tasks
+            var taskResponse = await fetch(API_BASE_URL + '/tasks?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
+            if (!taskResponse.ok) {
+              const errorText = await taskResponse.text();
+              throw new Error('Failed to load tasks: ' + (errorText || taskResponse.statusText));
+            }
+            var taskData = await taskResponse.json();
+            var normalizedTasks = (taskData || []).map(function(task) {
+              return {
+                task_id: task.task_id,
+                title: task.title || '',
+                description: task.description || null
+              };
+            });
+            setTasks(normalizedTasks);
+
+            // Fetch dropdown data (for form selectors)
             var dropdownResponse = await fetch(API_BASE_URL + '/dropdown-data');
             if (!dropdownResponse.ok) {
               const errorText = await dropdownResponse.text();
               throw new Error('Failed to load dropdown data: ' + (errorText || dropdownResponse.statusText));
             }
             var dropData = await dropdownResponse.json();
-            setDropdownData(dropData || { developers: [], projects: [], tasks: [] });
-            setProjects(dropData.projects || []);
-            setTasks(dropData.tasks || []);
+            setDropdownData({
+              developers: dropData.developers || [],
+              projects: dropData.projects || [],
+              tasks: dropData.tasks || []
+            });
           } catch (err) {
             setError(err.message);
           } finally {
@@ -484,13 +564,9 @@
           var response = await fetch(API_BASE_URL + '/tasks/' + taskId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
             method: 'DELETE'
           });
-          
           if (!response.ok) {
             const errorText = await response.text();
-            if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
-              throw new Error('Cannot delete task because it has associated activities. Please delete the activities first.');
-            }
-            throw new Error('Failed to delete project: ' + (errorText || response.statusText));
+            throw new Error('Failed to delete task: ' + (errorText || response.statusText));
           }
           setTasks(tasks.filter(function(t) { return t.task_id !== taskId; }));
           setDropdownData(Object.assign({}, dropdownData, { tasks: dropdownData.tasks.filter(function(t) { return t.task_id !== taskId; }) }));
@@ -801,12 +877,12 @@
                           className: index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
                         },
                           React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.name + ' (ID: ' + project.project_id + ')'),
-                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.status),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.status || 'Planning'),
                           React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.delivery_date || '-'),
                           React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.priority || '-'),
                           React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm flex space-x-2' },
                             React.createElement('select', {
-                              value: project.status,
+                              value: project.status || 'Planning',
                               onChange: function(e) { updateProjectStatus(project.project_id, e.target.value); },
                               className: 'p-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
                               disabled: loading
@@ -1017,7 +1093,7 @@
                       type: 'text',
                       value: newTask.description,
                       onChange: function(e) { setNewTask(Object.assign({}, newTask, { description: e.target.value })); },
-                      className: 'w-full p-2(border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
                       placeholder: 'Enter task description'
                     })
                   )
