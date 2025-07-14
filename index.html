@@ -1,21 +1,67 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Developer Index</title>
+  <title>Developer Homepage</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
-  <div id="root" class="w-full max-w-7xl mx-auto"></div>
+  <div id="root" class="w-full md:w-[70%] max-w-7xl mx-auto"></div>
   <div id="error-fallback" class="hidden text-center text-red-700 p-4"></div>
   <script type="text/babel">
-    function Index() {
-      const [developerId, setDeveloperId] = React.useState(localStorage.getItem('developer_id') || '');
+    function Homepage() {
+      const [developerId] = React.useState(localStorage.getItem('developer_id') || '');
+      const [userName] = React.useState(localStorage.getItem('user_name') || 'User');
+      const [email] = React.useState(localStorage.getItem('email') || '');
+      const [password] = React.useState(localStorage.getItem('password') || '');
+      const [permissions, setPermissions] = React.useState(localStorage.getItem('permissions') || 'low');
+      const [activeTab, setActiveTab] = React.useState('activities');
       const [activities, setActivities] = React.useState([]);
+      const [projects, setProjects] = React.useState([]);
+      const [tasks, setTasks] = React.useState([]);
       const [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
       const [newActivity, setNewActivity] = React.useState({
         project_id: '',
@@ -24,283 +70,994 @@
         status: 'To_Do',
         estimated_days: ''
       });
+      const [newProject, setNewProject] = React.useState({
+        name: '',
+        status: 'Planning',
+        delivery_date: '',
+        priority: ''
+      });
+      const [newTask, setNewTask] = React.useState({
+        title: '',
+        description: ''
+      });
+      const [editActivity, setEditActivity] = React.useState(null);
+      const [editProject, setEditProject] = React.useState(null);
+      const [editTask, setEditTask] = React.useState(null);
       const [error, setError] = React.useState('');
       const [success, setSuccess] = React.useState('');
       const [loading, setLoading] = React.useState(false);
+      const API_BASE_URL = 'http://localhost:8000'; // Update to your backend URL if different
 
-      // Fetch developer's activities and dropdown data
-      React.useEffect(() => {
-        if (!developerId) {
+      // Fetch data
+      React.useEffect(function() {
+        if (!developerId || !email || !password) {
           window.location.href = 'login.html';
           return;
         }
 
-        // Fetch activities
-        fetch(`https://fastapi.engineeringdevelopment.online/activities?developer_id=${developerId}`)
-          .then(response => {
-            if (!response.ok) throw new Error('Failed to load activities');
-            return response.json();
-          })
-          .then(data => {
-            console.log('Activities fetched:', data);
-            setActivities(data);
-          })
-          .catch(err => {
-            console.error('Error fetching activities:', err);
-            setError(err.message);
-          });
+        var fetchData = async function() {
+          setLoading(true);
+          try {
+            // Fetch permissions using /me endpoint
+            var permResponse = await fetch(API_BASE_URL + '/me?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
+            if (!permResponse.ok) {
+              const errorText = await permResponse.text();
+              throw new Error('Failed to load permissions: ' + (errorText || permResponse.statusText));
+            }
+            var permData = await permResponse.json();
+            if (!permData.permissions) {
+              throw new Error('Permissions not found in response');
+            }
+            setPermissions(permData.permissions || 'low');
+            localStorage.setItem('permissions', permData.permissions || 'low');
 
-        // Fetch dropdown data
-        fetch('https://fastapi.engineeringdevelopment.online/dropdown-data')
-          .then(response => {
-            if (!response.ok) throw new Error('Failed to load dropdown data');
-            return response.json();
-          })
-          .then(data => {
-            console.log('Dropdown data fetched:', data);
-            setDropdownData(data);
-          })
-          .catch(err => {
-            console.error('Error fetching dropdown data:', err);
-            setError(err.message);
-          });
-      }, [developerId]);
+            // Fetch activities
+            var actResponse = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
+            if (!actResponse.ok) {
+              const errorText = await actResponse.text();
+              throw new Error('Failed to load activities: ' + (errorText || actResponse.statusText));
+            }
+            var actData = await actResponse.json();
+            setActivities(Array.isArray(actData) ? actData : []);
 
-      // Handle status update
-      const updateStatus = (activityId, newStatus) => {
-        setLoading(true);
-        fetch(`https://fastapi.engineeringdevelopment.online/activities/${activityId}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus })
-        })
-          .then(response => {
-            if (!response.ok) throw new Error('Failed to update status');
-            return response.json();
-          })
-          .then(() => {
-            setActivities(activities.map(activity =>
-              activity.activity_id === activityId ? { ...activity, status: newStatus } : activity
-            ));
-            setSuccess('Status updated successfully');
-            setTimeout(() => setSuccess(''), 3000);
-          })
-          .catch(err => setError(err.message))
-          .finally(() => setLoading(false));
+            // Fetch dropdown data
+            var dropdownResponse = await fetch(API_BASE_URL + '/dropdown-data');
+            if (!dropdownResponse.ok) {
+              const errorText = await dropdownResponse.text();
+              throw new Error('Failed to load dropdown data: ' + (errorText || dropdownResponse.statusText));
+            }
+            var dropData = await dropdownResponse.json();
+            setDropdownData(dropData || { developers: [], projects: [], tasks: [] });
+            setProjects(dropData.projects || []);
+            setTasks(dropData.tasks || []);
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+        fetchData();
+      }, [developerId, email, password]);
+
+      // Handle tab switch
+      var handleTabChange = function(tab) {
+        setActiveTab(tab);
+        setError('');
+        setSuccess('');
+        setEditActivity(null);
+        setEditProject(null);
+        setEditTask(null);
       };
 
-      // Handle new activity submission
-      const handleAddActivity = (e) => {
+      // Activity handlers
+      var handleAddActivity = async function(e) {
         e.preventDefault();
         setError('');
         setSuccess('');
         setLoading(true);
-
-        const activityData = {
-          developer_id: parseInt(developerId),
+        var activityData = {
           project_id: parseInt(newActivity.project_id),
           task_id: parseInt(newActivity.task_id),
           details: newActivity.details || null,
           status: newActivity.status,
           estimated_days: parseInt(newActivity.estimated_days) || null
         };
+        try {
+          var response = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(activityData)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to add activity: ' + (errorText || response.statusText));
+          }
+          var data = await response.json();
+          setActivities(activities.concat([data]));
+          setSuccess('Activity added successfully');
+          setNewActivity({
+            project_id: '',
+            task_id: '',
+            details: '',
+            status: 'To_Do',
+            estimated_days: ''
+          });
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
 
-        fetch('https://fastapi.engineeringdevelopment.online/activities', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(activityData)
-        })
-          .then(response => {
-            if (!response.ok) throw new Error('Failed to add activity');
-            return response.json();
-          })
-          .then(data => {
-            setActivities([...activities, data]);
-            setSuccess('Activity added successfully');
-            setNewActivity({
-              project_id: '',
-              task_id: '',
-              details: '',
-              status: 'To_Do',
-              estimated_days: ''
-            });
-            setTimeout(() => setSuccess(''), 3000);
-          })
-          .catch(err => setError(err.message))
-          .finally(() => setLoading(false));
+      var updateActivityStatus = async function(activityId, newStatus) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+          var response = await fetch(API_BASE_URL + '/activities/' + activityId + '/status?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to update status: ' + (errorText || response.statusText));
+          }
+          setActivities(activities.map(function(activity) {
+            return activity.activity_id === activityId ? Object.assign({}, activity, { status: newStatus }) : activity;
+          }));
+          setSuccess('Status updated successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      var updateActivity = async function(activity) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        var activityData = {
+          project_id: parseInt(activity.project_id),
+          task_id: parseInt(activity.task_id),
+          details: activity.details || null,
+          status: activity.status,
+          estimated_days: parseInt(activity.estimated_days) || null
+        };
+        try {
+          var response = await fetch(API_BASE_URL + '/activities/' + activity.activity_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(activityData)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to update activity: ' + (errorText || response.statusText));
+          }
+          var data = await response.json();
+          setActivities(activities.map(function(a) { return a.activity_id === activity.activity_id ? data : a; }));
+          setEditActivity(null);
+          setSuccess('Activity updated successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      var deleteActivity = async function(activityId) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+          var response = await fetch(API_BASE_URL + '/activities/' + activityId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'DELETE'
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to delete activity: ' + (errorText || response.statusText));
+          }
+          setActivities(activities.filter(function(a) { return a.activity_id !== activityId; }));
+          setSuccess('Activity deleted successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Project handlers
+      var handleAddProject = async function(e) {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        var projectData = {
+          name: newProject.name,
+          status: newProject.status,
+          delivery_date: newProject.delivery_date || null,
+          priority: newProject.priority || null
+        };
+        try {
+          var response = await fetch(API_BASE_URL + '/projects?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(projectData)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to add project: ' + (errorText || response.statusText));
+          }
+          var data = await response.json();
+          setProjects(projects.concat([data]));
+          setDropdownData(Object.assign({}, dropdownData, { projects: dropdownData.projects.concat([data]) }));
+          setSuccess('Project added successfully');
+          setNewProject({ name: '', status: 'Planning', delivery_date: '', priority: '' });
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      var updateProjectStatus = async function(projectId, newStatus) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+          var response = await fetch(API_BASE_URL + '/projects/' + projectId + '/status?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to update project status: ' + (errorText || response.statusText));
+          }
+          setProjects(projects.map(function(project) {
+            return project.project_id === projectId ? Object.assign({}, project, { status: newStatus }) : project;
+          }));
+          setDropdownData(Object.assign({}, dropdownData, {
+            projects: dropdownData.projects.map(function(project) {
+              return project.project_id === projectId ? Object.assign({}, project, { status: newStatus }) : project;
+            })
+          }));
+          setSuccess('Project status updated successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      var updateProject = async function(project) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        var projectData = {
+          name: project.name,
+          status: project.status,
+          delivery_date: project.delivery_date || null,
+          priority: project.priority || null
+        };
+        try {
+          var response = await fetch(API_BASE_URL + '/projects/' + project.project_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(projectData)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to update project: ' + (errorText || response.statusText));
+          }
+          var data = await response.json();
+          setProjects(projects.map(function(p) { return p.project_id === project.project_id ? data : p; }));
+          setDropdownData(Object.assign({}, dropdownData, {
+            projects: dropdownData.projects.map(function(p) { return p.project_id === project.project_id ? data : p; })
+          }));
+          setEditProject(null);
+          setSuccess('Project updated successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      var deleteProject = async function(projectId) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+          var response = await fetch(API_BASE_URL + '/projects/' + projectId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'DELETE'
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to delete project: ' + (errorText || response.statusText));
+          }
+          setProjects(projects.filter(function(p) { return p.project_id !== projectId; }));
+          setDropdownData(Object.assign({}, dropdownData, { projects: dropdownData.projects.filter(function(p) { return p.project_id !== projectId; }) }));
+          setSuccess('Project deleted successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Task handlers
+      var handleAddTask = async function(e) {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        var taskData = {
+          title: newTask.title,
+          description: newTask.description || null
+        };
+        try {
+          var response = await fetch(API_BASE_URL + '/tasks?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to add task: ' + (errorText || response.statusText));
+          }
+          var data = await response.json();
+          setTasks(tasks.concat([data]));
+          setDropdownData(Object.assign({}, dropdownData, { tasks: dropdownData.tasks.concat([data]) }));
+          setSuccess('Task added successfully');
+          setNewTask({ title: '', description: '' });
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      var updateTask = async function(task) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        var taskData = {
+          title: task.title,
+          description: task.description || null
+        };
+        try {
+          var response = await fetch(API_BASE_URL + '/tasks/' + task.task_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to update task: ' + (errorText || response.statusText));
+          }
+          var data = await response.json();
+          setTasks(tasks.map(function(t) { return t.task_id === task.task_id ? data : t; }));
+          setDropdownData(Object.assign({}, dropdownData, {
+            tasks: dropdownData.tasks.map(function(t) { return t.task_id === task.task_id ? data : t; })
+          }));
+          setEditTask(null);
+          setSuccess('Task updated successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      var deleteTask = async function(taskId) {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+          var response = await fetch(API_BASE_URL + '/tasks/' + taskId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+            method: 'DELETE'
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to delete task: ' + (errorText || response.statusText));
+          }
+          setTasks(tasks.filter(function(t) { return t.task_id !== taskId; }));
+          setDropdownData(Object.assign({}, dropdownData, { tasks: dropdownData.tasks.filter(function(t) { return t.task_id !== taskId; }) }));
+          setSuccess('Task deleted successfully');
+          setTimeout(function() { setSuccess(''); }, 3000);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Helper functions for display
+      var getProjectName = function(id) {
+        var project = dropdownData.projects.find(function(p) { return p.project_id === id; });
+        return project ? project.name + ' (ID: ' + project.project_id + ')' : 'Project ' + id;
+      };
+
+      var getTaskTitle = function(id) {
+        var task = dropdownData.tasks.find(function(t) { return t.task_id === id; });
+        return task ? task.title + ' (ID: ' + task.task_id + ')' : 'Task ' + id;
+      };
+
+      var getDeveloperName = function(id) {
+        var developer = dropdownData.developers.find(function(d) { return d.developer_id === id; });
+        return developer ? developer.name : 'Developer ' + id;
       };
 
       // Handle logout
-      const handleLogout = () => {
-        localStorage.removeItem('developer_id');
+      var handleLogout = function() {
+        localStorage.clear();
         window.location.href = 'login.html';
       };
 
-      // Get names for display
-      const getProjectName = (id) => {
-        const project = dropdownData.projects.find(p => p.project_id === id);
-        return project ? `${project.name} (ID: ${project.project_id})` : `Project ${id}`;
-      };
-
-      const getTaskTitle = (id) => {
-        const task = dropdownData.tasks.find(t => t.task_id === id);
-        return task ? `${task.title} (ID: ${task.task_id})` : `Task ${id}`;
-      };
-
       return (
-        <div className="bg-white rounded-lg shadow-md p-6 sm:p-8 md:p-10">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">
-              My Activities
-            </h1>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              Logout
-            </button>
-          </div>
-          {error && (
-            <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="mb-6 p-4 bg-green-100 text-green-700 rounded-lg">
-              {success}
-            </div>
-          )}
-          <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">Your Activities</h2>
-          {activities.length === 0 ? (
-            <p className="text-gray-600 mb-6">No activities assigned to you.</p>
-          ) : (
-            <div className="p-4 bg-white rounded-lg shadow mb-8">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-200">
-                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Project</th>
-                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task</th>
-                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
-                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
-                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Estimated Days</th>
-                    <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activities.map((activity, index) => (
-                    <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getProjectName(activity.project_id)}</td>
-                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getTaskTitle(activity.task_id)}</td>
-                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.details || '-'}</td>
-                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.status.replace('_', ' ')}</td>
-                      <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
-                      <td className="p-2 md:p-3 text-xs md:text-sm">
-                        <select
-                          value={activity.status}
-                          onChange={(e) => updateStatus(activity.activity_id, e.target.value)}
-                          className="p-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                          disabled={loading}
-                        >
-                          <option value="To_Do">To Do</option>
-                          <option value="In_Progress">In Progress</option>
-                          <option value="Done">Done</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <h2 className="text-lg md:text-xl font-semibold mb-6 mt-8 text-gray-700">Add New Activity</h2>
-          <div className="p-4 bg-white rounded-lg shadow">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
-                <select
-                  value={newActivity.project_id}
-                  onChange={(e) => setNewActivity({ ...newActivity, project_id: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  required
-                >
-                  <option value="">Select Project</option>
-                  {dropdownData.projects.map(project => (
-                    <option key={project.project_id} value={project.project_id}>
-                      {project.name} (ID: {project.project_id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Task</label>
-                <select
-                  value={newActivity.task_id}
-                  onChange={(e) => setNewActivity({ ...newActivity, task_id: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  required
-                >
-                  <option value="">Select Task</option>
-                  {dropdownData.tasks.map(task => (
-                    <option key={task.task_id} value={task.task_id}>
-                      {task.title} (ID: {task.task_id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Details</label>
-                <input
-                  type="text"
-                  value={newActivity.details}
-                  onChange={(e) => setNewActivity({ ...newActivity, details: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  placeholder="Enter activity details"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={newActivity.status}
-                  onChange={(e) => setNewActivity({ ...newActivity, status: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                >
-                  <option value="To_Do">To Do</option>
-                  <option value="In_Progress">In Progress</option>
-                  <option value="Done">Done</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
-                <input
-                  type="number"
-                  value={newActivity.estimated_days}
-                  onChange={(e) => setNewActivity({ ...newActivity, estimated_days: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  placeholder="Enter estimated days"
-                />
-              </div>
-            </div>
-            <button
-              onClick={handleAddActivity}
-              disabled={loading}
-              className={`mt-6 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {loading ? 'Adding...' : 'Add Activity'}
-            </button>
-          </div>
-        </div>
+        React.createElement('div', { className: 'bg-white rounded-lg shadow-md p-6 sm:p-8 md:p-10' },
+          React.createElement('div', { className: 'flex justify-between items-center mb-6' },
+            React.createElement('div', null,
+              React.createElement('h1', { className: 'text-xl sm:text-2xl md:text-3xl font-bold text-gray-800' }, 'Developer Dashboard'),
+              React.createElement('p', { className: 'text-sm md:text-base text-gray-600' }, 'Welcome, ' + userName + ' (' + permissions + ' Permission)')
+            ),
+            React.createElement('button', {
+              onClick: handleLogout,
+              className: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700'
+            }, 'Logout')
+          ),
+          error && React.createElement('div', { className: 'mb-6 p-4 bg-red-100 text-red-700 rounded-lg' }, error),
+          success && React.createElement('div', { className: 'mb-6 p-4 bg-green-100 text-green-700 rounded-lg' }, success),
+          loading && React.createElement('div', { className: 'mb-6 p-4 text-center text-gray-600' }, 'Loading...'),
+          !loading && React.createElement(React.Fragment, null,
+            React.createElement('div', { className: 'mb-6' },
+              React.createElement('div', { className: 'flex space-x-4 border-b' },
+                React.createElement('button', {
+                  onClick: function() { handleTabChange('activities'); },
+                  className: 'px-4 py-2 font-medium ' + (activeTab === 'activities' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600')
+                }, 'Activities'),
+                (permissions === 'medium' || permissions === 'high') && React.createElement(React.Fragment, null,
+                  React.createElement('button', {
+                    onClick: function() { handleTabChange('projects'); },
+                    className: 'px-4 py-2 font-medium ' + (activeTab === 'projects' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600')
+                  }, 'Projects'),
+                  React.createElement('button', {
+                    onClick: function() { handleTabChange('tasks'); },
+                    className: 'px-4 py-2 font-medium ' + (activeTab === 'tasks' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600')
+                  }, 'Tasks')
+                )
+              )
+            ),
+            activeTab === 'activities' && React.createElement(React.Fragment, null,
+              React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' },
+                permissions === 'high' ? 'All Activities' : 'Your Activities'
+              ),
+              activities.length === 0 ? (
+                React.createElement('p', { className: 'text-gray-600 mb-6' }, 'No activities found.')
+              ) : (
+                React.createElement('div', { className: 'p-4 bg-white rounded-lg shadow mb-8 overflow-x-auto' },
+                  React.createElement('table', { className: 'w-full border-collapse min-w-[600px]' },
+                    React.createElement('thead', null,
+                      React.createElement('tr', { className: 'bg-gray-200' },
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Developer'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Project'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Task'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Details'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Status'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Estimated Days'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Actions')
+                      )
+                    ),
+                    React.createElement('tbody', null,
+                      activities.map(function(activity, index) {
+                        return React.createElement('tr', {
+                          key: activity.activity_id || index,
+                          className: index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                        },
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, getDeveloperName(activity.developer_id)),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, getProjectName(activity.project_id)),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, getTaskTitle(activity.task_id)),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, activity.details || '-'),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, activity.status.replace('_', ' ')),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, activity.estimated_days || '-'),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm flex space-x-2' },
+                            React.createElement('select', {
+                              value: activity.status,
+                              onChange: function(e) { updateActivityStatus(activity.activity_id, e.target.value); },
+                              className: 'p-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                              disabled: loading || (permissions === 'medium' && activity.developer_id !== parseInt(developerId))
+                            },
+                              React.createElement('option', { value: 'To_Do' }, 'To Do'),
+                              React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                              React.createElement('option', { value: 'Done' }, 'Done')
+                            ),
+                            permissions === 'high' && React.createElement(React.Fragment, null,
+                              React.createElement('button', {
+                                onClick: function() { setEditActivity(activity); },
+                                className: 'p-1 text-blue-600 hover:text-blue-800',
+                                disabled: loading
+                              }, 'Edit'),
+                              React.createElement('button', {
+                                onClick: function() { deleteActivity(activity.activity_id); },
+                                className: 'p-1 text-red-600 hover:text-red-800',
+                                disabled: loading
+                              }, 'Delete')
+                            )
+                          )
+                        );
+                      })
+                    )
+                  )
+                )
+              ),
+              (permissions === 'low' || permissions === 'medium' || permissions === 'high') && React.createElement(React.Fragment, null,
+                React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 mt-8 text-gray-700' }, 'Add New Activity'),
+                React.createElement('div', { className: 'p-4 bg-white rounded-lg shadow' },
+                  React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Project'),
+                      React.createElement('select', {
+                        value: newActivity.project_id,
+                        onChange: function(e) { setNewActivity(Object.assign({}, newActivity, { project_id: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        required: true
+                      },
+                        React.createElement('option', { value: '' }, 'Select Project'),
+                        dropdownData.projects.map(function(project) {
+                          return React.createElement('option', {
+                            key: project.project_id,
+                            value: project.project_id
+                          }, project.name + ' (ID: ' + project.project_id + ')');
+                        })
+                      )
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Task'),
+                      React.createElement('select', {
+                        value: newActivity.task_id,
+                        onChange: function(e) { setNewActivity(Object.assign({}, newActivity, { task_id: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        required: true
+                      },
+                        React.createElement('option', { value: '' }, 'Select Task'),
+                        dropdownData.tasks.map(function(task) {
+                          return React.createElement('option', {
+                            key: task.task_id,
+                            value: task.task_id
+                          }, task.title + ' (ID: ' + task.task_id + ')');
+                        })
+                      )
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Details'),
+                      React.createElement('input', {
+                        type: 'text',
+                        value: newActivity.details,
+                        onChange: function(e) { setNewActivity(Object.assign({}, newActivity, { details: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter activity details'
+                      })
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
+                      React.createElement('select', {
+                        value: newActivity.status,
+                        onChange: function(e) { setNewActivity(Object.assign({}, newActivity, { status: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      },
+                        React.createElement('option', { value: 'To_Do' }, 'To Do'),
+                        React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                        React.createElement('option', { value: 'Done' }, 'Done')
+                      )
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Estimated Days'),
+                      React.createElement('input', {
+                        type: 'number',
+                        value: newActivity.estimated_days,
+                        onChange: function(e) { setNewActivity(Object.assign({}, newActivity, { estimated_days: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter estimated days'
+                      })
+                    )
+                  ),
+                  React.createElement('button', {
+                    onClick: handleAddActivity,
+                    disabled: loading,
+                    className: 'mt-6 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                  }, loading ? 'Adding...' : 'Add Activity')
+                )
+              ),
+              editActivity && permissions === 'high' && React.createElement(React.Fragment, null,
+                React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow' },
+                  React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Activity'),
+                  React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Project'),
+                      React.createElement('select', {
+                        value: editActivity.project_id,
+                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { project_id: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      },
+                        React.createElement('option', { value: '' }, 'Select Project'),
+                        dropdownData.projects.map(function(project) {
+                          return React.createElement('option', {
+                            key: project.project_id,
+                            value: project.project_id
+                          }, project.name + ' (ID: ' + project.project_id + ')');
+                        })
+                      )
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Task'),
+                      React.createElement('select', {
+                        value: editActivity.task_id,
+                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { task_id: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      },
+                        React.createElement('option', { value: '' }, 'Select Task'),
+                        dropdownData.tasks.map(function(task) {
+                          return React.createElement('option', {
+                            key: task.task_id,
+                            value: task.task_id
+                          }, task.title + ' (ID: ' + task.task_id + ')');
+                        })
+                      )
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Details'),
+                      React.createElement('input', {
+                        type: 'text',
+                        value: editActivity.details || '',
+                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { details: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter activity details'
+                      })
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
+                      React.createElement('select', {
+                        value: editActivity.status,
+                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { status: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      },
+                        React.createElement('option', { value: 'To_Do' }, 'To Do'),
+                        React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                        React.createElement('option', { value: 'Done' }, 'Done')
+                      )
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Estimated Days'),
+                      React.createElement('input', {
+                        type: 'number',
+                        value: editActivity.estimated_days || '',
+                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { estimated_days: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter estimated days'
+                      })
+                    )
+                  ),
+                  React.createElement('div', { className: 'mt-6 flex space-x-4' },
+                    React.createElement('button', {
+                      onClick: function() { updateActivity(editActivity); },
+                      disabled: loading,
+                      className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                    }, loading ? 'Updating...' : 'Update Activity'),
+                    React.createElement('button', {
+                      onClick: function() { setEditActivity(null); },
+                      className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
+                    }, 'Cancel')
+                  )
+                )
+              )
+            ),
+            activeTab === 'projects' && (permissions === 'medium' || permissions === 'high') && React.createElement(React.Fragment, null,
+              React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Projects'),
+              projects.length === 0 ? (
+                React.createElement('p', { className: 'text-gray-600 mb-6' }, 'No projects found.')
+              ) : (
+                React.createElement('div', { className: 'p-4 bg-white rounded-lg shadow mb-8 overflow-x-auto' },
+                  React.createElement('table', { className: 'w-full border-collapse min-w-[600px]' },
+                    React.createElement('thead', null,
+                      React.createElement('tr', { className: 'bg-gray-200' },
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Name'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Status'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Delivery Date'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Priority'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Actions')
+                      )
+                    ),
+                    React.createElement('tbody', null,
+                      projects.map(function(project, index) {
+                        return React.createElement('tr', {
+                          key: project.project_id || index,
+                          className: index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                        },
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.name + ' (ID: ' + project.project_id + ')'),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.status),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.delivery_date || '-'),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, project.priority || '-'),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm flex space-x-2' },
+                            React.createElement('select', {
+                              value: project.status,
+                              onChange: function(e) { updateProjectStatus(project.project_id, e.target.value); },
+                              className: 'p-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                              disabled: loading
+                            },
+                              React.createElement('option', { value: 'Planning' }, 'Planning'),
+                              React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                              React.createElement('option', { value: 'Completed' }, 'Completed'),
+                              React.createElement('option', { value: 'Idle' }, 'Idle')
+                            ),
+                            permissions === 'high' && React.createElement(React.Fragment, null,
+                              React.createElement('button', {
+                                onClick: function() { setEditProject(project); },
+                                className: 'p-1 text-blue-600 hover:text-blue-800',
+                                disabled: loading
+                              }, 'Edit'),
+                              React.createElement('button', {
+                                onClick: function() { deleteProject(project.project_id); },
+                                className: 'p-1 text-red-600 hover:text-red-800',
+                                disabled: loading
+                              }, 'Delete')
+                            )
+                          )
+                        );
+                      })
+                    )
+                  )
+                )
+              ),
+              React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 mt-8 text-gray-700' }, 'Add New Project'),
+              React.createElement('div', { className: 'p-4 bg-white rounded-lg shadow' },
+                React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Name'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: newProject.name,
+                      onChange: function(e) { setNewProject(Object.assign({}, newProject, { name: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter project name',
+                      required: true
+                    })
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
+                    React.createElement('select', {
+                      value: newProject.status,
+                      onChange: function(e) { setNewProject(Object.assign({}, newProject, { status: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    },
+                      React.createElement('option', { value: 'Planning' }, 'Planning'),
+                      React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                      React.createElement('option', { value: 'Completed' }, 'Completed'),
+                      React.createElement('option', { value: 'Idle' }, 'Idle')
+                    )
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Delivery Date'),
+                    React.createElement('input', {
+                      type: 'date',
+                      value: newProject.delivery_date,
+                      onChange: function(e) { setNewProject(Object.assign({}, newProject, { delivery_date: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    })
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Priority'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: newProject.priority,
+                      onChange: function(e) { setNewProject(Object.assign({}, newProject, { priority: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter priority'
+                    })
+                  )
+                ),
+                React.createElement('button', {
+                  onClick: handleAddProject,
+                  disabled: loading,
+                  className: 'mt-6 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                }, loading ? 'Adding...' : 'Add Project')
+              ),
+              editProject && permissions === 'high' && React.createElement(React.Fragment, null,
+                React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow' },
+                  React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Project'),
+                  React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Name'),
+                      React.createElement('input', {
+                        type: 'text',
+                        value: editProject.name,
+                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { name: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter project name'
+                      })
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
+                      React.createElement('select', {
+                        value: editProject.status,
+                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { status: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      },
+                        React.createElement('option', { value: 'Planning' }, 'Planning'),
+                        React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                        React.createElement('option', { value: 'Completed' }, 'Completed'),
+                        React.createElement('option', { value: 'Idle' }, 'Idle')
+                      )
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Delivery Date'),
+                      React.createElement('input', {
+                        type: 'date',
+                        value: editProject.delivery_date || '',
+                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { delivery_date: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      })
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Priority'),
+                      React.createElement('input', {
+                        type: 'text',
+                        value: editProject.priority || '',
+                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { priority: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter priority'
+                      })
+                    )
+                  ),
+                  React.createElement('div', { className: 'mt-6 flex space-x-4' },
+                    React.createElement('button', {
+                      onClick: function() { updateProject(editProject); },
+                      disabled: loading,
+                      className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                    }, loading ? 'Updating...' : 'Update Project'),
+                    React.createElement('button', {
+                      onClick: function() { setEditProject(null); },
+                      className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
+                    }, 'Cancel')
+                  )
+                )
+              )
+            ),
+            activeTab === 'tasks' && (permissions === 'medium' || permissions === 'high') && React.createElement(React.Fragment, null,
+              React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Tasks'),
+              tasks.length === 0 ? (
+                React.createElement('p', { className: 'text-gray-600 mb-6' }, 'No tasks found.')
+              ) : (
+                React.createElement('div', { className: 'p-4 bg-white rounded-lg shadow mb-8 overflow-x-auto' },
+                  React.createElement('table', { className: 'w-full border-collapse min-w-[600px]' },
+                    React.createElement('thead', null,
+                      React.createElement('tr', { className: 'bg-gray-200' },
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Title'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Description'),
+                        React.createElement('th', { className: 'p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700' }, 'Actions')
+                      )
+                    ),
+                    React.createElement('tbody', null,
+                      tasks.map(function(task, index) {
+                        return React.createElement('tr', {
+                          key: task.task_id || index,
+                          className: index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                        },
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, task.title + ' (ID: ' + task.task_id + ')'),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm text-gray-600' }, task.description || '-'),
+                          React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm flex space-x-2' },
+                            permissions === 'high' && React.createElement(React.Fragment, null,
+                              React.createElement('button', {
+                                onClick: function() { setEditTask(task); },
+                                className: 'p-1 text-blue-600 hover:text-blue-800',
+                                disabled: loading
+                              }, 'Edit'),
+                              React.createElement('button', {
+                                onClick: function() { deleteTask(task.task_id); },
+                                className: 'p-1 text-red-600 hover:text-red-800',
+                                disabled: loading
+                              }, 'Delete')
+                            )
+                          )
+                        );
+                      })
+                    )
+                  )
+                )
+              ),
+              React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 mt-8 text-gray-700' }, 'Add New Task'),
+              React.createElement('div', { className: 'p-4 bg-white rounded-lg shadow' },
+                React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Title'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: newTask.title,
+                      onChange: function(e) { setNewTask(Object.assign({}, newTask, { title: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter task title',
+                      required: true
+                    })
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Description'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: newTask.description,
+                      onChange: function(e) { setNewTask(Object.assign({}, newTask, { description: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter task description'
+                    })
+                  )
+                ),
+                React.createElement('button', {
+                  onClick: handleAddTask,
+                  disabled: loading,
+                  className: 'mt-6 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                }, loading ? 'Adding...' : 'Add Task')
+              ),
+              editTask && permissions === 'high' && React.createElement(React.Fragment, null,
+                React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow' },
+                  React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Task'),
+                  React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Title'),
+                      React.createElement('input', {
+                        type: 'text',
+                        value: editTask.title,
+                        onChange: function(e) { setEditTask(Object.assign({}, editTask, { title: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter task title'
+                      })
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Description'),
+                      React.createElement('input', {
+                        type: 'text',
+                        value: editTask.description || '',
+                        onChange: function(e) { setEditTask(Object.assign({}, editTask, { description: e.target.value })); },
+                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                        placeholder: 'Enter task description'
+                      })
+                    )
+                  ),
+                  React.createElement('div', { className: 'mt-6 flex space-x-4' },
+                    React.createElement('button', {
+                      onClick: function() { updateTask(editTask); },
+                      disabled: loading,
+                      className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                    }, loading ? 'Updating...' : 'Update Task'),
+                    React.createElement('button', {
+                      onClick: function() { setEditTask(null); },
+                      className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
+                    }, 'Cancel')
+                  )
+                )
+              )
+            )
+          )
+        )
       );
     }
 
     try {
-      console.log('Attempting to render React component');
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(<Index />);
+      var root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(Homepage));
     } catch (error) {
-      console.error('Rendering error:', error);
-      const fallback = document.getElementById('error-fallback');
+      var fallback = document.getElementById('error-fallback');
       fallback.classList.remove('hidden');
-      fallback.innerHTML = 'Failed to load index: ' + error.message;
+      fallback.innerHTML = 'Failed to load homepage: ' + error.message;
     }
   </script>
 </body>
