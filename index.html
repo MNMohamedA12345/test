@@ -51,6 +51,38 @@
 <body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
   <div id="root" class="w-full md:w-[70%] max-w-7xl mx-auto"></div>
   <div id="error-fallback" class="hidden text-center text-red-700 p-4"></div>
+  <script type="text/javascript">
+    var gk_isXlsx = false;
+    var gk_xlsxFileLookup = {};
+    var gk_fileData = {};
+    function filledCell(cell) {
+      return cell !== '' && cell != null;
+    }
+    function loadFileData(filename) {
+      if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+        try {
+          var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+          var firstSheetName = workbook.SheetNames[0];
+          var worksheet = workbook.Sheets[firstSheetName];
+          var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+          var filteredData = jsonData.filter(row => row.some(filledCell));
+          var headerRowIndex = filteredData.findIndex((row, index) =>
+            row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+          );
+          if (headerRowIndex === -1 || headerRowIndex > 25) {
+            headerRowIndex = 0;
+          }
+          var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+          csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+          return csv;
+        } catch (e) {
+          console.error(e);
+          return "";
+        }
+      }
+      return gk_fileData[filename] || "";
+    }
+  </script>
   <script type="text/babel">
     function Homepage() {
       const [developerId] = React.useState(localStorage.getItem('developer_id') || '');
@@ -86,19 +118,19 @@
       const [error, setError] = React.useState('');
       const [success, setSuccess] = React.useState('');
       const [loading, setLoading] = React.useState(false);
-      const API_BASE_URL = 'https://fastapi.engineeringdevelopment.online'; // Update to your backend URL if different
+      const API_BASE_URL = 'https://fastapi.engineeringdevelopment.online';
+      var activityFormRef = React.useRef(null);
+      var projectFormRef = React.useRef(null);
+      var taskFormRef = React.useRef(null);
 
-      // Fetch data
       React.useEffect(function() {
         if (!developerId || !email || !password) {
           window.location.href = 'login.html';
           return;
         }
-
         var fetchData = async function() {
           setLoading(true);
           try {
-            // Fetch permissions using /me endpoint
             var permResponse = await fetch(API_BASE_URL + '/me?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
             if (!permResponse.ok) {
               const errorText = await permResponse.text();
@@ -110,8 +142,6 @@
             }
             setPermissions(permData.permissions || 'low');
             localStorage.setItem('permissions', permData.permissions || 'low');
-
-            // Fetch activities
             var actResponse = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
             if (!actResponse.ok) {
               const errorText = await actResponse.text();
@@ -119,8 +149,6 @@
             }
             var actData = await actResponse.json();
             setActivities(Array.isArray(actData) ? actData : []);
-
-            // Fetch dropdown data
             var dropdownResponse = await fetch(API_BASE_URL + '/dropdown-data');
             if (!dropdownResponse.ok) {
               const errorText = await dropdownResponse.text();
@@ -139,7 +167,6 @@
         fetchData();
       }, [developerId, email, password]);
 
-      // Handle tab switch
       var handleTabChange = function(tab) {
         setActiveTab(tab);
         setError('');
@@ -149,7 +176,33 @@
         setEditTask(null);
       };
 
-      // Activity handlers
+      var handleEditActivity = function(activity) {
+        setEditActivity(activity);
+        setTimeout(function() {
+          if (activityFormRef.current) {
+            activityFormRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 0);
+      };
+
+      var handleEditProject = function(project) {
+        setEditProject(project);
+        setTimeout(function() {
+          if (projectFormRef.current) {
+            projectFormRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 0);
+      };
+
+      var handleEditTask = function(task) {
+        setEditTask(task);
+        setTimeout(function() {
+          if (taskFormRef.current) {
+            taskFormRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 0);
+      };
+
       var handleAddActivity = async function(e) {
         e.preventDefault();
         setError('');
@@ -271,7 +324,6 @@
         }
       };
 
-      // Project handlers
       var handleAddProject = async function(e) {
         e.preventDefault();
         setError('');
@@ -343,7 +395,7 @@
         setSuccess('');
         var projectData = {
           name: project.name,
-          status: project.status,
+          status: project.status || 'Planning',
           delivery_date: project.delivery_date || null,
           priority: project.priority || null
         };
@@ -395,7 +447,6 @@
         }
       };
 
-      // Task handlers
       var handleAddTask = async function(e) {
         e.preventDefault();
         setError('');
@@ -484,7 +535,6 @@
         }
       };
 
-      // Helper functions for display
       var getProjectName = function(id) {
         var project = dropdownData.projects.find(function(p) { return p.project_id === id; });
         return project ? project.name + ' (ID: ' + project.project_id + ')' : 'Project ' + id;
@@ -500,7 +550,6 @@
         return developer ? developer.name : 'Developer ' + id;
       };
 
-      // Handle logout
       var handleLogout = function() {
         localStorage.clear();
         window.location.href = 'login.html';
@@ -585,7 +634,7 @@
                             ),
                             permissions === 'high' && React.createElement(React.Fragment, null,
                               React.createElement('button', {
-                                onClick: function() { setEditActivity(activity); },
+                                onClick: function() { handleEditActivity(activity); },
                                 className: 'p-1 text-blue-600 hover:text-blue-800',
                                 disabled: loading
                               }, 'Edit'),
@@ -680,86 +729,84 @@
                   }, loading ? 'Adding...' : 'Add Activity')
                 )
               ),
-              editActivity && permissions === 'high' && React.createElement(React.Fragment, null,
-                React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow' },
-                  React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Activity'),
-                  React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Project'),
-                      React.createElement('select', {
-                        value: editActivity.project_id,
-                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { project_id: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
-                      },
-                        React.createElement('option', { value: '' }, 'Select Project'),
-                        dropdownData.projects.map(function(project) {
-                          return React.createElement('option', {
-                            key: project.project_id,
-                            value: project.project_id
-                          }, project.name + ' (ID: ' + project.project_id + ')');
-                        })
-                      )
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Task'),
-                      React.createElement('select', {
-                        value: editActivity.task_id,
-                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { task_id: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
-                      },
-                        React.createElement('option', { value: '' }, 'Select Task'),
-                        dropdownData.tasks.map(function(task) {
-                          return React.createElement('option', {
-                            key: task.task_id,
-                            value: task.task_id
-                          }, task.title + ' (ID: ' + task.task_id + ')');
-                        })
-                      )
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Details'),
-                      React.createElement('input', {
-                        type: 'text',
-                        value: editActivity.details || '',
-                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { details: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
-                        placeholder: 'Enter activity details'
-                      })
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
-                      React.createElement('select', {
-                        value: editActivity.status,
-                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { status: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
-                      },
-                        React.createElement('option', { value: 'To_Do' }, 'To Do'),
-                        React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
-                        React.createElement('option', { value: 'Done' }, 'Done')
-                      )
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Estimated Days'),
-                      React.createElement('input', {
-                        type: 'number',
-                        value: editActivity.estimated_days || '',
-                        onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { estimated_days: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
-                        placeholder: 'Enter estimated days'
+              editActivity && permissions === 'high' && React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow', ref: activityFormRef, id: 'edit-activity-form' },
+                React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Activity'),
+                React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Project'),
+                    React.createElement('select', {
+                      value: editActivity.project_id,
+                      onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { project_id: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    },
+                      React.createElement('option', { value: '' }, 'Select Project'),
+                      dropdownData.projects.map(function(project) {
+                        return React.createElement('option', {
+                          key: project.project_id,
+                          value: project.project_id
+                        }, project.name + ' (ID: ' + project.project_id + ')');
                       })
                     )
                   ),
-                  React.createElement('div', { className: 'mt-6 flex space-x-4' },
-                    React.createElement('button', {
-                      onClick: function() { updateActivity(editActivity); },
-                      disabled: loading,
-                      className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
-                    }, loading ? 'Updating...' : 'Update Activity'),
-                    React.createElement('button', {
-                      onClick: function() { setEditActivity(null); },
-                      className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
-                    }, 'Cancel')
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Task'),
+                    React.createElement('select', {
+                      value: editActivity.task_id,
+                      onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { task_id: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    },
+                      React.createElement('option', { value: '' }, 'Select Task'),
+                      dropdownData.tasks.map(function(task) {
+                        return React.createElement('option', {
+                          key: task.task_id,
+                          value: task.task_id
+                        }, task.title + ' (ID: ' + task.task_id + ')');
+                      })
+                    )
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Details'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: editActivity.details || '',
+                      onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { details: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter activity details'
+                    })
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
+                    React.createElement('select', {
+                      value: editActivity.status,
+                      onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { status: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    },
+                      React.createElement('option', { value: 'To_Do' }, 'To Do'),
+                      React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                      React.createElement('option', { value: 'Done' }, 'Done')
+                    )
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Estimated Days'),
+                    React.createElement('input', {
+                      type: 'number',
+                      value: editActivity.estimated_days || '',
+                      onChange: function(e) { setEditActivity(Object.assign({}, editActivity, { estimated_days: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter estimated days'
+                    })
                   )
+                ),
+                React.createElement('div', { className: 'mt-6 flex space-x-4' },
+                  React.createElement('button', {
+                    onClick: function() { updateActivity(editActivity); },
+                    disabled: loading,
+                    className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                  }, loading ? 'Updating...' : 'Update Activity'),
+                  React.createElement('button', {
+                    onClick: function() { setEditActivity(null); },
+                    className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
+                  }, 'Cancel')
                 )
               )
             ),
@@ -799,11 +846,11 @@
                               React.createElement('option', { value: 'Planning' }, 'Planning'),
                               React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
                               React.createElement('option', { value: 'Completed' }, 'Completed'),
-                              React.createElement('option', { value: 'Idle' }, 'Idle')
+                              React.createElement('option', { value: 'On_Hold' }, 'On Hold')
                             ),
                             permissions === 'high' && React.createElement(React.Fragment, null,
                               React.createElement('button', {
-                                onClick: function() { setEditProject(project); },
+                                onClick: function() { handleEditProject(project); },
                                 className: 'p-1 text-blue-600 hover:text-blue-800',
                                 disabled: loading
                               }, 'Edit'),
@@ -844,7 +891,7 @@
                       React.createElement('option', { value: 'Planning' }, 'Planning'),
                       React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
                       React.createElement('option', { value: 'Completed' }, 'Completed'),
-                      React.createElement('option', { value: 'Idle' }, 'Idle')
+                      React.createElement('option', { value: 'On_Hold' }, 'On Hold')
                     )
                   ),
                   React.createElement('div', null,
@@ -858,13 +905,16 @@
                   ),
                   React.createElement('div', null,
                     React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Priority'),
-                    React.createElement('input', {
-                      type: 'text',
+                    React.createElement('select', {
                       value: newProject.priority,
                       onChange: function(e) { setNewProject(Object.assign({}, newProject, { priority: e.target.value })); },
-                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
-                      placeholder: 'Enter priority'
-                    })
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    },
+                      React.createElement('option', { value: '' }, 'Select Priority'),
+                      React.createElement('option', { value: 'Low' }, 'Low'),
+                      React.createElement('option', { value: 'Medium' }, 'Medium'),
+                      React.createElement('option', { value: 'High' }, 'High')
+                    )
                   )
                 ),
                 React.createElement('button', {
@@ -873,64 +923,67 @@
                   className: 'mt-6 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
                 }, loading ? 'Adding...' : 'Add Project')
               ),
-              editProject && permissions === 'high' && React.createElement(React.Fragment, null,
-                React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow' },
-                  React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Project'),
-                  React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Name'),
-                      React.createElement('input', {
-                        type: 'text',
-                        value: editProject.name,
-                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { name: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
-                        placeholder: 'Enter project name'
-                      })
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
-                      React.createElement('select', {
-                        value: editProject.status,
-                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { status: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
-                      },
-                        React.createElement('option', { value: 'Planning' }, 'Planning'),
-                        React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
-                        React.createElement('option', { value: 'Completed' }, 'Completed'),
-                        React.createElement('option', { value: 'Idle' }, 'Idle')
-                      )
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Delivery Date'),
-                      React.createElement('input', {
-                        type: 'date',
-                        value: editProject.delivery_date || '',
-                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { delivery_date: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
-                      })
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Priority'),
-                      React.createElement('input', {
-                        type: 'text',
-                        value: editProject.priority || '',
-                        onChange: function(e) { setEditProject(Object.assign({}, editProject, { priority: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
-                        placeholder: 'Enter priority'
-                      })
+              editProject && permissions === 'high' && React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow', ref: projectFormRef, id: 'edit-project-form' },
+                React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Project'),
+                React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Name'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: editProject.name,
+                      onChange: function(e) { setEditProject(Object.assign({}, editProject, { name: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter project name',
+                      required: true
+                    })
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Status'),
+                    React.createElement('select', {
+                      value: editProject.status || 'Planning',
+                      onChange: function(e) { setEditProject(Object.assign({}, editProject, { status: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      required: true
+                    },
+                      React.createElement('option', { value: 'Planning' }, 'Planning'),
+                      React.createElement('option', { value: 'In_Progress' }, 'In Progress'),
+                      React.createElement('option', { value: 'Completed' }, 'Completed'),
+                      React.createElement('option', { value: 'On_Hold' }, 'On Hold')
                     )
                   ),
-                  React.createElement('div', { className: 'mt-6 flex space-x-4' },
-                    React.createElement('button', {
-                      onClick: function() { updateProject(editProject); },
-                      disabled: loading,
-                      className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
-                    }, loading ? 'Updating...' : 'Update Project'),
-                    React.createElement('button', {
-                      onClick: function() { setEditProject(null); },
-                      className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
-                    }, 'Cancel')
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Delivery Date'),
+                    React.createElement('input', {
+                      type: 'date',
+                      value: editProject.delivery_date || '',
+                      onChange: function(e) { setEditProject(Object.assign({}, editProject, { delivery_date: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    })
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Priority'),
+                    React.createElement('select', {
+                      value: editProject.priority || '',
+                      onChange: function(e) { setEditProject(Object.assign({}, editProject, { priority: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    },
+                      React.createElement('option', { value: '' }, 'Select Priority'),
+                      React.createElement('option', { value: 'Low' }, 'Low'),
+                      React.createElement('option', { value: 'Medium' }, 'Medium'),
+                      React.createElement('option', { value: 'High' }, 'High')
+                    )
                   )
+                ),
+                React.createElement('div', { className: 'mt-6 flex space-x-4' },
+                  React.createElement('button', {
+                    onClick: function() { updateProject(editProject); },
+                    disabled: loading,
+                    className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                  }, loading ? 'Updating...' : 'Update Project'),
+                  React.createElement('button', {
+                    onClick: function() { setEditProject(null); },
+                    className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
+                  }, 'Cancel')
                 )
               )
             ),
@@ -959,7 +1012,7 @@
                           React.createElement('td', { className: 'p-2 md:p-3 text-xs md:text-sm flex space-x-2' },
                             permissions === 'high' && React.createElement(React.Fragment, null,
                               React.createElement('button', {
-                                onClick: function() { setEditTask(task); },
+                                onClick: function() { handleEditTask(task); },
                                 className: 'p-1 text-blue-600 hover:text-blue-800',
                                 disabled: loading
                               }, 'Edit'),
@@ -1007,42 +1060,41 @@
                   className: 'mt-6 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
                 }, loading ? 'Adding...' : 'Add Task')
               ),
-              editTask && permissions === 'high' && React.createElement(React.Fragment, null,
-                React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow' },
-                  React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Task'),
-                  React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Title'),
-                      React.createElement('input', {
-                        type: 'text',
-                        value: editTask.title,
-                        onChange: function(e) { setEditTask(Object.assign({}, editTask, { title: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
-                        placeholder: 'Enter task title'
-                      })
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Description'),
-                      React.createElement('input', {
-                        type: 'text',
-                        value: editTask.description || '',
-                        onChange: function(e) { setEditTask(Object.assign({}, editTask, { description: e.target.value })); },
-                        className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
-                        placeholder: 'Enter task description'
-                      })
-                    )
+              editTask && permissions === 'high' && React.createElement('div', { className: 'mt-8 p-4 bg-white rounded-lg shadow', ref: taskFormRef, id: 'edit-task-form' },
+                React.createElement('h2', { className: 'text-lg md:text-xl font-semibold mb-6 text-gray-700' }, 'Edit Task'),
+                React.createElement('div', { className: 'grid grid-cols-1 sm:grid-cols-2 gap-6' },
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Title'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: editTask.title,
+                      onChange: function(e) { setEditTask(Object.assign({}, editTask, { title: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter task title',
+                      required: true
+                    })
                   ),
-                  React.createElement('div', { className: 'mt-6 flex space-x-4' },
-                    React.createElement('button', {
-                      onClick: function() { updateTask(editTask); },
-                      disabled: loading,
-                      className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
-                    }, loading ? 'Updating...' : 'Update Task'),
-                    React.createElement('button', {
-                      onClick: function() { setEditTask(null); },
-                      className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
-                    }, 'Cancel')
+                  React.createElement('div', null,
+                    React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Description'),
+                    React.createElement('input', {
+                      type: 'text',
+                      value: editTask.description || '',
+                      onChange: function(e) { setEditTask(Object.assign({}, editTask, { description: e.target.value })); },
+                      className: 'w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600',
+                      placeholder: 'Enter task description'
+                    })
                   )
+                ),
+                React.createElement('div', { className: 'mt-6 flex space-x-4' },
+                  React.createElement('button', {
+                    onClick: function() { updateTask(editTask); },
+                    disabled: loading,
+                    className: 'w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ' + (loading ? 'opacity-50 cursor-not-allowed' : '')
+                  }, loading ? 'Updating...' : 'Update Task'),
+                  React.createElement('button', {
+                    onClick: function() { setEditTask(null); },
+                    className: 'w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400'
+                  }, 'Cancel')
                 )
               )
             )
