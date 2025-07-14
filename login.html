@@ -42,15 +42,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Developer Login</title>
+  <title>Login</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4 sm:px-6 md:px-8">
-  <div id="root" class="w-full max-w-md"></div>
-  <div id="error-fallback" class="hidden text-center text-red-700 p-4"></div>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4">
+  <div id="root" className="w-full max-w-md"></div>
   <script type="text/babel">
     function Login() {
       const [email, setEmail] = React.useState('');
@@ -74,7 +73,11 @@
           })
           .then(data => {
             localStorage.setItem('developer_id', data.developer_id);
-            window.location.href = 'index.html';
+            localStorage.setItem('user_name', `${data.first_name} ${data.last_name}`);
+            localStorage.setItem('email', email);
+            localStorage.setItem('password', password);
+            localStorage.setItem('permissions', data.permissions);
+            window.location.href = 'homepage.html';
           })
           .catch(err => {
             setError(err.message);
@@ -83,15 +86,15 @@
       };
 
       return (
-        <div className="bg-white rounded-lg shadow-md p-6 sm:p-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 text-center">Developer Login</h1>
+        <div className="bg-white p-6 rounded-lg shadow-md w-full">
+          <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Login</h1>
           {error && (
             <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-center">
               {error}
             </div>
           )}
-          <div>
-            <div className="mb-4">
+          <div className="space-y-4">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
                 type="email"
@@ -102,7 +105,7 @@
                 required
               />
             </div>
-            <div className="mb-6">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
                 type="password"
@@ -121,9 +124,6 @@
               {loading ? 'Logging in...' : 'Login'}
             </button>
           </div>
-          <p className="mt-4 text-center text-sm text-gray-600">
-            Need access? Contact your administrator.
-          </p>
         </div>
       );
     }
@@ -131,9 +131,8 @@
     try {
       ReactDOM.render(<Login />, document.getElementById('root'));
     } catch (error) {
-      const fallback = document.getElementById('error-fallback');
-      fallback.classList.remove('hidden');
-      fallback.innerHTML = 'Failed to load login page: ' + error.message;
+      const root = document.getElementById('root');
+      root.innerHTML = `<div class="text-center text-red-700 p-4">Failed to load login page: ${error.message}</div>`;
     }
   </script>
 </body>
