@@ -798,7 +798,7 @@
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Est. Days</th>
-                            {(permissions === 'high' || parseInt(developerId) === activity.developer_id) && (
+                            {permissions === 'high' && (
                               <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
                             )}
                           </tr>
@@ -824,14 +824,10 @@
                                   </select>
                                 </td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
-                                {(permissions === 'high' || parseInt(developerId) === activity.developer_id) && (
+                                {permissions === 'high' && (
                                   <td className="p-2 md:p-3 text-xs md:text-sm">
-                                    {permissions === 'high' && (
-                                      <button onClick={() => handleEditActivity(activity)} className="text-blue-600 hover:underline mr-2">Edit</button>
-                                    )}
-                                    {permissions === 'high' && (
-                                      <button onClick={() => deleteActivity(activity.activity_id)} className="text-red-600 hover:underline">Delete</button>
-                                    )}
+                                    <button onClick={() => handleEditActivity(activity)} className="text-blue-600 hover:underline mr-2">Edit</button>
+                                    <button onClick={() => deleteActivity(activity.activity_id)} className="text-red-600 hover:underline">Delete</button>
                                   </td>
                                 )}
                               </tr>
@@ -925,6 +921,108 @@
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Delivery Date</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Priority</th>
+                            {permissions === 'high' && (
+                              <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projects.map(function(project) {
+                            return (
+                              <tr key={project.project_id} className="border-b">
+                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.name}</td>
+                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.description || '-'}</td>
+                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.status}</td>
+                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.delivery_date || '-'}</td>
+                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.priority || '-'}</td>
+                                {permissions === 'high' && (
+                                  <td className="p-2 md:p-3 text-xs md:text-sm">
+                                    <button onClick={() => handleEditProject(project)} className="text-blue-600 hover:underline mr-2">Edit</button>
+                                    <button onClick={() => deleteProject(project.project_id)} className="text-red-600 hover:underline">Delete</button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <h3 ref={projectFormRef} className="text-md md:text-lg font-semibold mb-4 text-gray-700">{editProject ? 'Edit Project' : 'Add New Project'}</h3>
+                  <form onSubmit={editProject ? (e) => { e.preventDefault(); updateProject(editProject); } : handleAddProject} className="space-y-4 mb-8">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Name</label>
+                      <input
+                        type="text"
+                        value={editProject ? editProject.name : newProject.name}
+                        onChange={(e) => editProject ? setEditProject({ ...editProject, name: e.target.value }) : setNewProject({ ...newProject, name: e.target.value })}
+                        className="w-full p-2 border rounded-lg text-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Description</label>
+                      <input
+                        type="text"
+                        value={editProject ? editProject.description || '' : newProject.description}
+                        onChange={(e) => editProject ? setEditProject({ ...editProject, description: e.target.value }) : setNewProject({ ...newProject, description: e.target.value })}
+                        className="w-full p-2 border rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Status</label>
+                      <select
+                        value={editProject ? editProject.status : newProject.status}
+                        onChange={(e) => editProject ? setEditProject({ ...editProject, status: e.target.value }) : setNewProject({ ...newProject, status: e.target.value })}
+                        className="w-full p-2 border rounded-lg text-sm"
+                        required
+                      >
+                        <option value="To_Do">To Do</option>
+                        <option value="In_Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Delivery Date</label>
+                      <input
+                        type="date"
+                        value={editProject ? editProject.delivery_date || '' : newProject.delivery_date}
+                        onChange={(e) => editProject ? setEditProject({ ...editProject, delivery_date: e.target.value }) : setNewProject({ ...newProject, delivery_date: e.target.value })}
+                        className="w-full p-2 border rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Priority</label>
+                      <select
+                        value={editProject ? editProject.priority || '' : newProject.priority}
+                        onChange={(e) => editProject ? setEditProject({ ...editProject, priority: e.target.value }) : setNewProject({ ...newProject, priority: e.target.value })}
+                        className="w-full p-2 border rounded-lg text-sm"
+                      >
+                        <option value="">Select Priority</option>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                    </div>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editProject ? 'Update Project' : 'Add Project'}</button>
+                    {editProject && (
+                      <button type="button" onClick={() => setEditProject(null)} className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel Edit</button>
+                    )}
+                  </form>
+                </React.Fragment>
+              )}
+              {activeTab === 'tasks' && (permissions === 'medium' || permissions === 'high') && (
+                <React.Fragment>
+                  <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">Tasks</h2>
+                  {tasks.length === 0 ? (
+                    <p className="text-gray-600 mb-6">No tasks found.</p>
+                  ) : (
+                    <div className="p-4 bg-white rounded-lg shadow mb-8 overflow-x-auto">
+                      <table className="w-full border-collapse min-w-[600px]">
+                        <thead>
+                          <tr className="bg-gray-200">
+                            <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Title</th>
+                            <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Description</th>
                             {permissions === 'high' && (
                               <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
                             )}
