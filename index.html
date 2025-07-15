@@ -37,7 +37,7 @@
         }
         return gk_fileData[filename] || "";
         }
-        </script>```html
+        </script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -235,6 +235,13 @@
                 name: developer.name || `Developer ${developer.developer_id}`
               };
             });
+            // Ensure the logged-in developer is included in dropdownData.developers
+            if (!normalizedDropdownDevelopers.find(d => d.developer_id === parseInt(developerId))) {
+              normalizedDropdownDevelopers.push({
+                developer_id: parseInt(developerId),
+                name: userName || `Developer ${developerId}`
+              });
+            }
             setDropdownData({
               developers: normalizedDropdownDevelopers,
               projects: (dropData.projects || []).map(function(project) {
@@ -879,7 +886,7 @@
                         </thead>
                         <tbody>
                           {activities.map(function(activity) {
-                            const canEdit = permissions === 'high' || (permissions === 'medium' && parseInt(developerId) === activity.developer_id);
+                            const canEdit = permissions === 'high';
                             return (
                               <tr key={activity.activity_id} className="border-b">
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getDeveloperName(activity.developer_id)}</td>
@@ -1281,4 +1288,3 @@
   </script>
 </body>
 </html>
-```
