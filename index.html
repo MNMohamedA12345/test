@@ -264,6 +264,10 @@
       };
 
       var handleEditDeveloper = function(developer) {
+        if (developer.permissions === 'high') {
+          setError('Cannot edit a developer with high permissions');
+          return;
+        }
         setEditDeveloper({
           developer_id: developer.developer_id,
           first_name: developer.first_name,
@@ -483,9 +487,6 @@
                 method: 'DELETE'
               });
               if (!response.ok) {
-                if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
-              throw new Error('Cannot delete project because it has associated activities. Please delete the activities first.');
-            }
                 const errorText = await response.text();
                 throw new Error('Failed to delete project: ' + (errorText || response.statusText));
               }
@@ -580,9 +581,6 @@
                 method: 'DELETE'
               });
               if (!response.ok) {
-                if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
-              throw new Error('Cannot delete task because it has associated activities. Please delete the activities first.');
-            }
                 const errorText = await response.text();
                 throw new Error('Failed to delete task: ' + (errorText || response.statusText));
               }
@@ -640,6 +638,10 @@
       };
 
       var updateDeveloper = async function(developer) {
+        if (developer.permissions === 'high') {
+          setError('Cannot edit a developer with high permissions');
+          return;
+        }
         showConfirmation(
           'Confirm Developer Update',
           'Are you sure you want to update this developer?',
@@ -693,6 +695,11 @@
       };
 
       var deleteDeveloper = async function(developerId) {
+        const developer = developers.find(function(d) { return d.developer_id === developerId; });
+        if (developer && developer.permissions === 'high') {
+          setError('Cannot delete a developer with high permissions');
+          return;
+        }
         showConfirmation(
           'Confirm Developer Deletion',
           'Are you sure you want to delete this developer? This action cannot be undone.',
@@ -703,9 +710,6 @@
                 method: 'DELETE'
               });
               if (!response.ok) {
-                if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
-              throw new Error('Cannot delete developer because it has associated activities. Please delete the activities first.');
-            }
                 const errorText = await response.text();
                 throw new Error('Failed to delete developer: ' + (errorText || response.statusText));
               }
@@ -886,7 +890,7 @@
                       >
                         <option value="To_Do">To Do</option>
                         <option value="In_Progress">In Progress</option>
-                        <option value="Done	">Done</option>
+                        <option value="Done">Done</option>
                       </select>
                     </div>
                     <div>
@@ -977,10 +981,9 @@
                         className="w-full p-2 border rounded-lg text-sm"
                         required
                       >
-                        <option value="Planning">Planning</option>
+                        <option value="To_Do">To Do</option>
                         <option value="In_Progress">In Progress</option>
-                        <option value="On_Hold">On Hold</option>
-                        <option value="Completed">Completed</option>
+                        <option value="Done">Done</option>
                       </select>
                     </div>
                     <div>
@@ -1100,8 +1103,20 @@
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.email}</td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.permissions}</td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm">
-                                  <button onClick={() => handleEditDeveloper(developer)} className="text-blue-600 hover:underline mr-2">Edit</button>
-                                  <button onClick={() => deleteDeveloper(developer.developer_id)} className="text-red-600 hover:underline">Delete</button>
+                                  <button
+                                    onClick={() => handleEditDeveloper(developer)}
+                                    className={`mr-2 ${developer.permissions === 'high' ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:underline'}`}
+                                    disabled={developer.permissions === 'high'}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => deleteDeveloper(developer.developer_id)}
+                                    className={`mr-2 ${developer.permissions === 'high' ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:underline'}`}
+                                    disabled={developer.permissions === 'high'}
+                                  >
+                                    Delete
+                                  </button>
                                 </td>
                               </tr>
                             );
