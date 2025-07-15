@@ -576,10 +576,13 @@ var handleAddActivity = async function(e) {
               var response = await fetch(API_BASE_URL + '/projects/' + projectId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
                 method: 'DELETE'
               });
-              if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error('Failed to delete project: ' + (errorText || response.statusText));
-              }
+             if (!response.ok) {
+            const errorText = await response.text();
+            if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
+              throw new Error('Cannot delete project because it has associated activities. Please delete the activities first.');
+            }
+            throw new Error('Failed to delete project: ' + (errorText || response.statusText));
+          }
               setProjects(projects.filter(function(p) { return p.project_id !== projectId; }));
               setDropdownData({ ...dropdownData, projects: dropdownData.projects.filter(function(p) { return p.project_id !== projectId; }) });
               setSuccess('Project deleted successfully');
@@ -672,6 +675,9 @@ var handleAddActivity = async function(e) {
               });
               if (!response.ok) {
                 const errorText = await response.text();
+                if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
+              throw new Error('Cannot delete task because it has associated activities. Please delete the activities first.');
+            }
                 throw new Error('Failed to delete task: ' + (errorText || response.statusText));
               }
               setTasks(tasks.filter(function(t) { return t.task_id !== taskId; }));
