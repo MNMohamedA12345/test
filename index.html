@@ -323,47 +323,66 @@
         setTimeout(function() { if (developerFormRef.current) developerFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
       };
 
-      var handleAddActivity = async function(e) {
-        e.preventDefault();
-        setLoading(true);
-        if (!newActivity.status || !['To_Do', 'In_Progress', 'Done'].includes(newActivity.status)) {
-          setError('Please select a valid status (To Do, In Progress, or Done).');
-          setLoading(false);
-          return;
-        }
-        const estimatedDays = parseInt(newActivity.estimated_days);
-        if (newActivity.estimated_days && (isNaN(estimatedDays) || estimatedDays < 0 || estimatedDays > 10000)) {
-          setError('Estimated days must be a number between 0 and 10,000.');
-          setLoading(false);
-          return;
-        }
-        var activityData = {
-          project_id: parseInt(newActivity.project_id),
-          task_id: parseInt(newActivity.task_id),
-          details: newActivity.details || null,
-          status: newActivity.status,
-          estimated_days: estimatedDays || null
-        };
-        try {
-          var response = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(activityData)
-          });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error('Failed to add activity: ' + (errorText || response.statusText));
+      
+var handleAddActivity = async function(e) {
+  e.preventDefault();
+  setLoading(true);
+  if (!newActivity.status || !['To_Do', 'In_Progress', 'Done'].includes(newActivity.status)) {
+    setError('Please select a valid status (To Do, In Progress, or Done).');
+    setLoading(false);
+    return;
+  }
+  const estimatedDays = parseInt(newActivity.estimated_days);
+  if (newActivity.estimated_days && (isNaN(estimatedDays) || estimatedDays < 0 || estimatedDays > 10000)) {
+    setError('Estimated days must be a number between 0 and 10,000.');
+    setLoading(false);
+    return;
+  }
+  var activityData = {
+    project_id: parseInt(newActivity.project_id),
+    task_id: parseInt(newActivity.task_id),
+    details: newActivity.details || null,
+    status: newActivity.status,
+    estimated_days: estimatedDays || null
+  };
+  try {
+    var response = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(activityData)
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error('Failed to add activity: ' + (errorText || response.statusText));
+    }
+    var data = await response.json();
+    // Ensure the activity includes the developer_id
+    const newActivityWithDeveloper = {
+      ...data,
+      developer_id: data.developer_id || parseInt(developerId) // Fallback to logged-in developerId
+    };
+    setActivities(activities.concat([newActivityWithDeveloper]));
+    // Update dropdownData.developers if the developer_id is not present
+    if (!dropdownData.developers.find(d => d.developer_id === newActivityWithDeveloper.developer_id)) {
+      setDropdownData({
+        ...dropdownData,
+        developers: [
+          ...dropdownData.developers,
+          {
+            developer_id: newActivityWithDeveloper.developer_id,
+            name: userName || `Developer ${newActivityWithDeveloper.developer_id}`
           }
-          var data = await response.json();
-          setActivities(activities.concat([data]));
-          setSuccess('Activity added successfully');
-          setNewActivity({ project_id: '', task_id: '', details: '', status: 'To_Do', estimated_days: '' });
-        } catch (err) {
-          setError(err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
+        ]
+      });
+    }
+    setSuccess('Activity added successfully');
+    setNewActivity({ project_id: '', task_id: '', details: '', status: 'To_Do', estimated_days: '' });
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
       var updateActivityStatus = async function(activityId, newStatus) {
         showConfirmation(
