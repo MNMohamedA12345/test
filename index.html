@@ -898,9 +898,6 @@ var handleAddActivity = async function(e) {
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Est. Days</th>
-                            {(permissions === 'high' || permissions === 'medium') && (
-                              <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
-                            )}
                           </tr>
                         </thead>
                         <tbody>
@@ -914,15 +911,20 @@ var handleAddActivity = async function(e) {
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.details || '-'}</td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm">
                                   <select
-                                    value={activity.status}
-                                    onChange={(e) => updateActivityStatus(activity.activity_id, e.target.value)}
-                                    className="w-full p-1 rounded border border-gray-300 text-xs md:text-sm"
-                                    disabled={(permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id}
-                                  >
-                                    <option value="To_Do">To Do</option>
-                                    <option value="In_Progress">In Progress</option>
-                                    <option value="Done">Done</option>
-                                  </select>
+  value={activity.status}
+  onChange={(e) => updateActivityStatus(activity.activity_id, e.target.value)}
+  className={`w-full p-1 rounded border text-xs md:text-sm
+    ${((permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id)
+      ? 'bg-gray-300 text-gray-800 border-gray-500 opacity-100 cursor-not-allowed'
+      : 'border-gray-300'}
+  `}
+  disabled={(permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id}
+>
+  <option value="To_Do">To Do</option>
+  <option value="In_Progress">In Progress</option>
+  <option value="Done">Done</option>
+</select>
+
                                 </td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
                                 {(permissions === 'high' || permissions === 'medium') && (
