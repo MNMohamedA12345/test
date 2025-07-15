@@ -37,7 +37,8 @@
         }
         return gk_fileData[filename] || "";
         }
-        </script><!DOCTYPE html>
+        </script>```html
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -51,6 +52,38 @@
 <body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
   <div id="root" className="w-full md:w-[70%] max-w-7xl mx-auto"></div>
   <div id="error-fallback" className="hidden text-center text-red-700 p-4"></div>
+  <script type="text/javascript">
+    var gk_isXlsx = false;
+    var gk_xlsxFileLookup = {};
+    var gk_fileData = {};
+    function filledCell(cell) {
+      return cell !== '' && cell != null;
+    }
+    function loadFileData(filename) {
+      if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+        try {
+          var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+          var firstSheetName = workbook.SheetNames[0];
+          var worksheet = workbook.Sheets[firstSheetName];
+          var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+          var filteredData = jsonData.filter(row => row.some(filledCell));
+          var headerRowIndex = filteredData.findIndex((row, index) =>
+            row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+          );
+          if (headerRowIndex === -1 || headerRowIndex > 25) {
+            headerRowIndex = 0;
+          }
+          var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+          csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+          return csv;
+        } catch (e) {
+          console.error(e);
+          return "";
+        }
+      }
+      return gk_fileData[filename] || "";
+    }
+  </script>
   <script type="text/babel">
     function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel }) {
       if (!isOpen) return null;
@@ -94,13 +127,13 @@
         project_id: '',
         task_id: '',
         details: '',
-        status: '',
+        status: 'To_Do',
         estimated_days: ''
       });
       const [newProject, setNewProject] = React.useState({
         name: '',
         description: '',
-        status: '',
+        status: 'Planning',
         delivery_date: '',
         priority: ''
       });
@@ -156,7 +189,7 @@
                 project_id: project.project_id,
                 name: project.name || '',
                 description: project.description || null,
-                status: project.status || 'To_Do',
+                status: project.status || 'Planning',
                 delivery_date: project.delivery_date || null,
                 priority: project.priority || null
               };
@@ -249,6 +282,10 @@
       };
 
       var handleEditActivity = function(activity) {
+        if (permissions === 'medium' && parseInt(developerId) !== activity.developer_id) {
+          setError('You can only edit your own activities.');
+          return;
+        }
         setEditActivity(activity);
         setTimeout(function() { if (activityFormRef.current) activityFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
       };
@@ -282,12 +319,23 @@
       var handleAddActivity = async function(e) {
         e.preventDefault();
         setLoading(true);
+        if (!newActivity.status || !['To_Do', 'In_Progress', 'Done'].includes(newActivity.status)) {
+          setError('Please select a valid status (To Do, In Progress, or Done).');
+          setLoading(false);
+          return;
+        }
+        const estimatedDays = parseInt(newActivity.estimated_days);
+        if (newActivity.estimated_days && (isNaN(estimatedDays) || estimatedDays < 0 || estimatedDays > 10000)) {
+          setError('Estimated days must be a number between 0 and 10,000.');
+          setLoading(false);
+          return;
+        }
         var activityData = {
           project_id: parseInt(newActivity.project_id),
           task_id: parseInt(newActivity.task_id),
           details: newActivity.details || null,
           status: newActivity.status,
-          estimated_days: parseInt(newActivity.estimated_days) || null
+          estimated_days: estimatedDays || null
         };
         try {
           var response = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
@@ -302,7 +350,7 @@
           var data = await response.json();
           setActivities(activities.concat([data]));
           setSuccess('Activity added successfully');
-          setNewActivity({ project_id: '', task_id: '', details: '', status: '', estimated_days: '' });
+          setNewActivity({ project_id: '', task_id: '', details: '', status: 'To_Do', estimated_days: '' });
         } catch (err) {
           setError(err.message);
         } finally {
@@ -341,17 +389,28 @@
       };
 
       var updateActivity = async function(activity) {
+        if (permissions === 'medium' && parseInt(developerId) !== activity.developer_id) {
+          setError('You can only edit the status of your own activities.');
+          setLoading(false);
+          return;
+        }
         showConfirmation(
           'Confirm Activity Update',
           'Are you sure you want to update this activity?',
           async () => {
             setLoading(true);
-            var activityData = {
+            const estimatedDays = parseInt(activity.estimated_days);
+            if (activity.estimated_days && (isNaN(estimatedDays) || estimatedDays < 0 || estimatedDays > 10000)) {
+              setError('Estimated days must be a number between 0 and 10,000.');
+              setLoading(false);
+              return;
+            }
+            var activityData = permissions === 'medium' ? { status: activity.status } : {
               project_id: parseInt(activity.project_id),
               task_id: parseInt(activity.task_id),
               details: activity.details || null,
               status: activity.status,
-              estimated_days: parseInt(activity.estimated_days) || null
+              estimated_days: estimatedDays || null
             };
             try {
               var response = await fetch(API_BASE_URL + '/activities/' + activity.activity_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
@@ -406,6 +465,11 @@
       var handleAddProject = async function(e) {
         e.preventDefault();
         setLoading(true);
+        if (!newProject.status || !['Planning', 'In_Progress', 'On_Hold', 'Completed'].includes(newProject.status)) {
+          setError('Please select a valid status (Planning, In Progress, On Hold, or Completed).');
+          setLoading(false);
+          return;
+        }
         var projectData = {
           name: newProject.name,
           description: newProject.description || null,
@@ -427,7 +491,7 @@
           setProjects(projects.concat([data]));
           setDropdownData({ ...dropdownData, projects: dropdownData.projects.concat([data]) });
           setSuccess('Project added successfully');
-          setNewProject({ name: '', description: '', status: '', delivery_date: '', priority: '' });
+          setNewProject({ name: '', description: '', status: 'Planning', delivery_date: '', priority: '' });
         } catch (err) {
           setError(err.message);
         } finally {
@@ -600,6 +664,11 @@
       var handleAddDeveloper = async function(e) {
         e.preventDefault();
         setLoading(true);
+        if (newDeveloper.password.length > 50) {
+          setError('Password must be 50 characters or less.');
+          setLoading(false);
+          return;
+        }
         var developerData = {
           first_name: newDeveloper.first_name,
           last_name: newDeveloper.last_name,
@@ -647,6 +716,11 @@
           'Are you sure you want to update this developer?',
           async () => {
             setLoading(true);
+            if (developer.password && developer.password.length > 50) {
+              setError('Password must be 50 characters or less.');
+              setLoading(false);
+              return;
+            }
             var developerData = {
               first_name: developer.first_name,
               last_name: developer.last_name,
@@ -798,13 +872,14 @@
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Est. Days</th>
-                            {permissions === 'high' && (
+                            {(permissions === 'high' || permissions === 'medium') && (
                               <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
                             )}
                           </tr>
                         </thead>
                         <tbody>
                           {activities.map(function(activity) {
+                            const canEdit = permissions === 'high' || (permissions === 'medium' && parseInt(developerId) === activity.developer_id);
                             return (
                               <tr key={activity.activity_id} className="border-b">
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getDeveloperName(activity.developer_id)}</td>
@@ -816,7 +891,7 @@
                                     value={activity.status}
                                     onChange={(e) => updateActivityStatus(activity.activity_id, e.target.value)}
                                     className="w-full p-1 rounded border border-gray-300 text-xs md:text-sm"
-                                    disabled={permissions === 'low' && parseInt(developerId) !== activity.developer_id}
+                                    disabled={(permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id}
                                   >
                                     <option value="To_Do">To Do</option>
                                     <option value="In_Progress">In Progress</option>
@@ -824,10 +899,14 @@
                                   </select>
                                 </td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
-                                {permissions === 'high' && (
+                                {(permissions === 'high' || permissions === 'medium') && (
                                   <td className="p-2 md:p-3 text-xs md:text-sm">
-                                    <button onClick={() => handleEditActivity(activity)} className="text-blue-600 hover:underline mr-2">Edit</button>
-                                    <button onClick={() => deleteActivity(activity.activity_id)} className="text-red-600 hover:underline">Delete</button>
+                                    {canEdit && (
+                                      <button onClick={() => handleEditActivity(activity)} className="text-blue-600 hover:underline mr-2">Edit</button>
+                                    )}
+                                    {permissions === 'high' && (
+                                      <button onClick={() => deleteActivity(activity.activity_id)} className="text-red-600 hover:underline">Delete</button>
+                                    )}
                                   </td>
                                 )}
                               </tr>
@@ -846,6 +925,7 @@
                         onChange={(e) => editActivity ? setEditActivity({ ...editActivity, project_id: e.target.value }) : setNewActivity({ ...newActivity, project_id: e.target.value })}
                         className="w-full p-2 border rounded-lg text-sm"
                         required
+                        disabled={editActivity && permissions === 'medium'}
                       >
                         <option value="">Select Project</option>
                         {dropdownData.projects.map(function(project) {
@@ -860,6 +940,7 @@
                         onChange={(e) => editActivity ? setEditActivity({ ...editActivity, task_id: e.target.value }) : setNewActivity({ ...newActivity, task_id: e.target.value })}
                         className="w-full p-2 border rounded-lg text-sm"
                         required
+                        disabled={editActivity && permissions === 'medium'}
                       >
                         <option value="">Select Task</option>
                         {dropdownData.tasks.map(function(task) {
@@ -874,6 +955,7 @@
                         value={editActivity ? editActivity.details || '' : newActivity.details}
                         onChange={(e) => editActivity ? setEditActivity({ ...editActivity, details: e.target.value }) : setNewActivity({ ...newActivity, details: e.target.value })}
                         className="w-full p-2 border rounded-lg text-sm"
+                        disabled={editActivity && permissions === 'medium'}
                       />
                     </div>
                     <div>
@@ -890,13 +972,15 @@
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Estimated Days</label>
+                      <label className="block text-sm font-medium text-gray-700">Estimated Days (max 10,000)</label>
                       <input
                         type="number"
                         value={editActivity ? editActivity.estimated_days || '' : newActivity.estimated_days}
                         onChange={(e) => editActivity ? setEditActivity({ ...editActivity, estimated_days: e.target.value }) : setNewActivity({ ...newActivity, estimated_days: e.target.value })}
                         className="w-full p-2 border rounded-lg text-sm"
                         min="0"
+                        max="10000"
+                        disabled={editActivity && permissions === 'medium'}
                       />
                     </div>
                     <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editActivity ? 'Update Activity' : 'Add Activity'}</button>
@@ -921,109 +1005,6 @@
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Delivery Date</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Priority</th>
-                            {permissions === 'high' && (
-                              <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {projects.map(function(project) {
-                            return (
-                              <tr key={project.project_id} className="border-b">
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.name}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.description || '-'}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.status}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.delivery_date || '-'}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.priority || '-'}</td>
-                                {permissions === 'high' && (
-                                  <td className="p-2 md:p-3 text-xs md:text-sm">
-                                    <button onClick={() => handleEditProject(project)} className="text-blue-600 hover:underline mr-2">Edit</button>
-                                    <button onClick={() => deleteProject(project.project_id)} className="text-red-600 hover:underline">Delete</button>
-                                  </td>
-                                )}
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  <h3 ref={projectFormRef} className="text-md md:text-lg font-semibold mb-4 text-gray-700">{editProject ? 'Edit Project' : 'Add New Project'}</h3>
-                  <form onSubmit={editProject ? (e) => { e.preventDefault(); updateProject(editProject); } : handleAddProject} className="space-y-4 mb-8">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Name</label>
-                      <input
-                        type="text"
-                        value={editProject ? editProject.name : newProject.name}
-                        onChange={(e) => editProject ? setEditProject({ ...editProject, name: e.target.value }) : setNewProject({ ...newProject, name: e.target.value })}
-                        className="w-full p-2 border rounded-lg text-sm"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Description</label>
-                      <input
-                        type="text"
-                        value={editProject ? editProject.description || '' : newProject.description}
-                        onChange={(e) => editProject ? setEditProject({ ...editProject, description: e.target.value }) : setNewProject({ ...newProject, description: e.target.value })}
-                        className="w-full p-2 border rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Status</label>
-                      <select
-                        value={editProject ? editProject.status : newProject.status}
-                        onChange={(e) => editProject ? setEditProject({ ...editProject, status: e.target.value }) : setNewProject({ ...newProject, status: e.target.value })}
-                        className="w-full p-2 border rounded-lg text-sm"
-                        required
-                      >
-                        <option value="Planning">Planning</option>
-                        <option value="In_Progress">In Progress</option>
-                        <option value="On_Hold">On Hold</option>
-                        <option value="Completed">Completed</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Delivery Date</label>
-                      <input
-                        type="date"
-                        value={editProject ? editProject.delivery_date || '' : newProject.delivery_date}
-                        onChange={(e) => editProject ? setEditProject({ ...editProject, delivery_date: e.target.value }) : setNewProject({ ...newProject, delivery_date: e.target.value })}
-                        className="w-full p-2 border rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Priority</label>
-                      <select
-                        value={editProject ? editProject.priority || '' : newProject.priority}
-                        onChange={(e) => editProject ? setEditProject({ ...editProject, priority: e.target.value }) : setNewProject({ ...newProject, priority: e.target.value })}
-                        className="w-full p-2 border rounded-lg text-sm"
-                      >
-                        <option value="">Select Priority</option>
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                      </select>
-                    </div>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editProject ? 'Update Project' : 'Add Project'}</button>
-                    {editProject && (
-                      <button type="button" onClick={() => setEditProject(null)} className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel Edit</button>
-                    )}
-                  </form>
-                </React.Fragment>
-              )}
-              {activeTab === 'tasks' && (permissions === 'medium' || permissions === 'high') && (
-                <React.Fragment>
-                  <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">Tasks</h2>
-                  {tasks.length === 0 ? (
-                    <p className="text-gray-600 mb-6">No tasks found.</p>
-                  ) : (
-                    <div className="p-4 bg-white rounded-lg shadow mb-8 overflow-x-auto">
-                      <table className="w-full border-collapse min-w-[600px]">
-                        <thead>
-                          <tr className="bg-gray-200">
-                            <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Title</th>
-                            <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Description</th>
                             {permissions === 'high' && (
                               <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
                             )}
@@ -1258,14 +1239,15 @@
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">{editDeveloper ? 'New Password (Optional)' : 'Password'}</label>
+                      <label className="block text-sm font-medium text-gray-700">{editDeveloper ? 'New Password (Optional, max 50 characters)' : 'Password (max 50 characters)'}</label>
                       <input
                         type="password"
                         value={editDeveloper ? editDeveloper.password : newDeveloper.password}
                         onChange={(e) => editDeveloper ? setEditDeveloper({ ...editDeveloper, password: e.target.value }) : setNewDeveloper({ ...newDeveloper, password: e.target.value })}
                         className="w-full p-2 border rounded-lg text-sm"
                         required={!editDeveloper}
-                        placeholder={editDeveloper ? 'Leave blank to keep unchanged' : ''}
+                        maxLength={50}
+                        placeholder={editDeveloper ? 'Leave blank to keep unchanged' : 'Max 50 characters'}
                       />
                     </div>
                     <div>
@@ -1299,3 +1281,4 @@
   </script>
 </body>
 </html>
+```
