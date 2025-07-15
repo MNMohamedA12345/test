@@ -94,13 +94,13 @@
         project_id: '',
         task_id: '',
         details: '',
-        status: 'To_Do',
+        status: '',
         estimated_days: ''
       });
       const [newProject, setNewProject] = React.useState({
         name: '',
         description: '',
-        status: 'To_Do',
+        status: '',
         delivery_date: '',
         priority: ''
       });
@@ -302,7 +302,7 @@
           var data = await response.json();
           setActivities(activities.concat([data]));
           setSuccess('Activity added successfully');
-          setNewActivity({ project_id: '', task_id: '', details: '', status: 'To_Do', estimated_days: '' });
+          setNewActivity({ project_id: '', task_id: '', details: '', status: '', estimated_days: '' });
         } catch (err) {
           setError(err.message);
         } finally {
@@ -427,7 +427,7 @@
           setProjects(projects.concat([data]));
           setDropdownData({ ...dropdownData, projects: dropdownData.projects.concat([data]) });
           setSuccess('Project added successfully');
-          setNewProject({ name: '', description: '', status: 'To_Do', delivery_date: '', priority: '' });
+          setNewProject({ name: '', description: '', status: '', delivery_date: '', priority: '' });
         } catch (err) {
           setError(err.message);
         } finally {
