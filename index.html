@@ -473,6 +473,9 @@ var handleAddActivity = async function(e) {
                 method: 'DELETE'
               });
               if (!response.ok) {
+                if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
+              throw new Error('Cannot delete developer because it has associated activities. Please delete the activities first.');
+            }
                 const errorText = await response.text();
                 throw new Error('Failed to delete activity: ' + (errorText || response.statusText));
               }
