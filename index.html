@@ -37,21 +37,17 @@
         }
         return gk_fileData[filename] || "";
         }
-        </script>
-<!DOCTYPE html>
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Developer Homepage</title>
+  <title>Developer Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.21.4/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
-  <div id="root" className="w-full md:w-[70%] max-w-7xl mx-auto"></div>
-  <div id="error-fallback" className="hidden text-center text-red-700 p-4"></div>
   <script type="text/javascript">
     var gk_isXlsx = false;
     var gk_xlsxFileLookup = {};
@@ -77,14 +73,36 @@
           csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
           return csv;
         } catch (e) {
-          console.error(e);
+          console.error('Error in loadFileData:', e);
           return "";
         }
       }
       return gk_fileData[filename] || "";
     }
   </script>
-  <script type="text/babel">
+</head>
+<body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
+  <div id="root" className="w-full md:w-[70%] max-w-7xl mx-auto"></div>
+  <div id="error-fallback" className="hidden text-center text-red-700 p-4"></div>
+  <script type="text/babel" data-presets="react">
+    class ErrorBoundary extends React.Component {
+      state = { error: null };
+      static getDerivedStateFromError(error) {
+        return { error: error.message };
+      }
+      render() {
+        if (this.state.error) {
+          return (
+            <div className="p-4 bg-red-100 text-red-700 rounded-lg mx-auto max-w-7xl">
+              <h2 className="text-lg font-semibold">Something went wrong</h2>
+              <p>{this.state.error}</p>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
     function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel }) {
       if (!isOpen) return null;
       return (
@@ -122,13 +140,15 @@
       const [projects, setProjects] = React.useState([]);
       const [tasks, setTasks] = React.useState([]);
       const [developers, setDevelopers] = React.useState([]);
+      const [logs, setLogs] = React.useState([]);
       const [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
       const [newActivity, setNewActivity] = React.useState({
         project_id: '',
         task_id: '',
         details: '',
         status: 'To_Do',
-        estimated_days: ''
+        estimated_days: '',
+        created_at: ''
       });
       const [newProject, setNewProject] = React.useState({
         name: '',
@@ -156,86 +176,90 @@
       const [success, setSuccess] = React.useState('');
       const [loading, setLoading] = React.useState(false);
       const [modal, setModal] = React.useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, onCancel: () => {} });
-      const API_BASE_URL = 'https://fastapi.engineeringdevelopment.online';
-      var activityFormRef = React.useRef(null);
-      var projectFormRef = React.useRef(null);
-      var taskFormRef = React.useRef(null);
-      var developerFormRef = React.useRef(null);
+      const API_BASE_URL = 'http://localhost:8000';
 
-      React.useEffect(function() {
+      const activityFormRef = React.useRef(null);
+      const projectFormRef = React.useRef(null);
+      const taskFormRef = React.useRef(null);
+      const developerFormRef = React.useRef(null);
+
+      React.useEffect(() => {
         if (!developerId || !email || !password) {
           window.location.href = 'login.html';
           return;
         }
-        var fetchData = async function() {
+        const fetchData = async () => {
           setLoading(true);
           try {
-            var permResponse = await fetch(API_BASE_URL + '/me?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
-            if (!permResponse.ok) throw new Error('Failed to load permissions');
-            var permData = await permResponse.json();
+            const permResponse = await fetch(`${API_BASE_URL}/me?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`);
+            if (!permResponse.ok) throw new Error('Failed to load permissions: ' + permResponse.statusText);
+            const permData = await permResponse.json();
             setPermissions(permData.permissions || 'low');
             localStorage.setItem('permissions', permData.permissions || 'low');
 
-            var actResponse = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
-            if (!actResponse.ok) throw new Error('Failed to load activities');
-            var actData = await actResponse.json();
+            const actResponse = await fetch(`${API_BASE_URL}/activities?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`);
+            if (!actResponse.ok) throw new Error('Failed to load activities: ' + actResponse.statusText);
+            const actData = await actResponse.json();
             setActivities(Array.isArray(actData) ? actData : []);
 
-            var projResponse = await fetch(API_BASE_URL + '/projects?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
-            if (!projResponse.ok) throw new Error('Failed to load projects');
-            var projData = await projResponse.json();
-            var normalizedProjects = (projData || []).map(function(project) {
-              return {
-                project_id: project.project_id,
-                name: project.name || '',
-                description: project.description || null,
-                status: project.status || 'Planning',
-                delivery_date: project.delivery_date || null,
-                priority: project.priority || null
-              };
-            });
+            const projResponse = await fetch(`${API_BASE_URL}/projects?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`);
+            if (!projResponse.ok) throw new Error('Failed to load projects: ' + projResponse.statusText);
+            const projData = await projResponse.json();
+            const normalizedProjects = (projData || []).map(project => ({
+              project_id: project.project_id,
+              name: project.name || '',
+              description: project.description || null,
+              status: project.status || 'Planning',
+              delivery_date: project.delivery_date || null,
+              priority: project.priority || null
+            }));
             setProjects(normalizedProjects);
 
-            var taskResponse = await fetch(API_BASE_URL + '/tasks?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
-            if (!taskResponse.ok) throw new Error('Failed to load tasks');
-            var taskData = await taskResponse.json();
-            var normalizedTasks = (taskData || []).map(function(task) {
-              return {
-                task_id: task.task_id,
-                title: task.title || '',
-                description: task.description || null
-              };
-            });
+            const taskResponse = await fetch(`${API_BASE_URL}/tasks?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`);
+            if (!taskResponse.ok) throw new Error('Failed to load tasks: ' + taskResponse.statusText);
+            const taskData = await taskResponse.json();
+            const normalizedTasks = (taskData || []).map(task => ({
+              task_id: task.task_id,
+              title: task.title || '',
+              description: task.description || null
+            }));
             setTasks(normalizedTasks);
 
             if (permData.permissions === 'high') {
-              var devResponse = await fetch(API_BASE_URL + '/developers?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password));
-              if (!devResponse.ok) throw new Error('Failed to load developers');
-              var devData = await devResponse.json();
-              var normalizedDevelopers = (devData || []).map(function(developer) {
-                return {
+              try {
+                const devResponse = await fetch(`${API_BASE_URL}/developers?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`);
+                if (!devResponse.ok) throw new Error('Failed to load developers: ' + devResponse.statusText);
+                const devData = await devResponse.json();
+                const normalizedDevelopers = (devData || []).map(developer => ({
                   developer_id: developer.developer_id,
                   first_name: developer.first_name || '',
                   last_name: developer.last_name || '',
                   name: `${developer.first_name} ${developer.last_name}`.trim() || `Developer ${developer.developer_id}`,
                   email: developer.email || '',
                   permissions: developer.permissions || 'low'
-                };
-              });
-              setDevelopers(normalizedDevelopers);
+                }));
+                setDevelopers(normalizedDevelopers);
+
+                const logsResponse = await fetch(`${API_BASE_URL}/logs?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`);
+                if (!logsResponse.ok) {
+                  const errorText = await logsResponse.text();
+                  throw new Error(`Failed to fetch logs: ${errorText || logsResponse.statusText} (Status: ${logsResponse.status})`);
+                }
+                const logsData = await logsResponse.json();
+                setLogs(Array.isArray(logsData) ? logsData : []);
+              } catch (err) {
+                setError(err.message);
+                console.error('Logs fetch error:', err);
+              }
             }
 
-            var dropdownResponse = await fetch(API_BASE_URL + '/dropdown-data');
-            if (!dropdownResponse.ok) throw new Error('Failed to load dropdown data');
-            var dropData = await dropdownResponse.json();
-            console.log('Dropdown developers:', dropData.developers);
-            var normalizedDropdownDevelopers = (dropData.developers || []).map(function(developer) {
-              return {
-                developer_id: developer.developer_id,
-                name: developer.name || `Developer ${developer.developer_id}`
-              };
-            });
-            // Ensure the logged-in developer is included in dropdownData.developers
+            const dropdownResponse = await fetch(`${API_BASE_URL}/dropdown-data`);
+            if (!dropdownResponse.ok) throw new Error('Failed to load dropdown data: ' + dropdownResponse.statusText);
+            const dropData = await dropdownResponse.json();
+            const normalizedDropdownDevelopers = (dropData.developers || []).map(developer => ({
+              developer_id: developer.developer_id,
+              name: developer.name || `Developer ${developer.developer_id}`
+            }));
             if (!normalizedDropdownDevelopers.find(d => d.developer_id === parseInt(developerId))) {
               normalizedDropdownDevelopers.push({
                 developer_id: parseInt(developerId),
@@ -244,22 +268,19 @@
             }
             setDropdownData({
               developers: normalizedDropdownDevelopers,
-              projects: (dropData.projects || []).map(function(project) {
-                return {
-                  project_id: project.project_id,
-                  name: project.name || '',
-                  description: project.description || null
-                };
-              }),
-              tasks: (dropData.tasks || []).map(function(task) {
-                return {
-                  task_id: task.task_id,
-                  title: task.title || ''
-                };
-              })
+              projects: (dropData.projects || []).map(project => ({
+                project_id: project.project_id,
+                name: project.name || '',
+                description: project.description || null
+              })),
+              tasks: (dropData.tasks || []).map(task => ({
+                task_id: task.task_id,
+                title: task.title || ''
+              }))
             });
           } catch (err) {
             setError(err.message);
+            console.error('Fetch error:', err);
           } finally {
             setLoading(false);
           }
@@ -267,7 +288,7 @@
         fetchData();
       }, [developerId, email, password]);
 
-      var showConfirmation = function(title, message, onConfirm) {
+      const showConfirmation = (title, message, onConfirm) => {
         setModal({
           isOpen: true,
           title,
@@ -277,7 +298,7 @@
         });
       };
 
-      var handleTabChange = function(tab) {
+      const handleTabChange = (tab) => {
         setActiveTab(tab);
         setError('');
         setSuccess('');
@@ -288,26 +309,26 @@
         setModal({ isOpen: false, title: '', message: '', onConfirm: () => {}, onCancel: () => {} });
       };
 
-      var handleEditActivity = function(activity) {
+      const handleEditActivity = (activity) => {
         if (permissions === 'medium' && parseInt(developerId) !== activity.developer_id) {
           setError('You can only edit your own activities.');
           return;
         }
         setEditActivity(activity);
-        setTimeout(function() { if (activityFormRef.current) activityFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
+        setTimeout(() => { if (activityFormRef.current) activityFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
       };
 
-      var handleEditProject = function(project) {
+      const handleEditProject = (project) => {
         setEditProject(project);
-        setTimeout(function() { if (projectFormRef.current) projectFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
+        setTimeout(() => { if (projectFormRef.current) projectFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
       };
 
-      var handleEditTask = function(task) {
+      const handleEditTask = (task) => {
         setEditTask(task);
-        setTimeout(function() { if (taskFormRef.current) taskFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
+        setTimeout(() => { if (taskFormRef.current) taskFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
       };
 
-      var handleEditDeveloper = function(developer) {
+      const handleEditDeveloper = (developer) => {
         if (developer.permissions === 'high') {
           setError('Cannot edit a developer with high permissions');
           return;
@@ -320,78 +341,85 @@
           permissions: developer.permissions,
           password: ''
         });
-        setTimeout(function() { if (developerFormRef.current) developerFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
+        setTimeout(() => { if (developerFormRef.current) developerFormRef.current.scrollIntoView({ behavior: 'smooth' }); }, 0);
       };
 
-      
-var handleAddActivity = async function(e) {
-  e.preventDefault();
-  setLoading(true);
-  if (!newActivity.status || !['To_Do', 'In_Progress', 'Done'].includes(newActivity.status)) {
-    setError('Please select a valid status (To Do, In Progress, or Done).');
-    setLoading(false);
-    return;
-  }
-  const estimatedDays = parseInt(newActivity.estimated_days);
-  if (newActivity.estimated_days && (isNaN(estimatedDays) || estimatedDays < 0 || estimatedDays > 10000)) {
-    setError('Estimated days must be a number between 0 and 10,000.');
-    setLoading(false);
-    return;
-  }
-  var activityData = {
-    project_id: parseInt(newActivity.project_id),
-    task_id: parseInt(newActivity.task_id),
-    details: newActivity.details || null,
-    status: newActivity.status,
-    estimated_days: estimatedDays || null
-  };
-  try {
-    var response = await fetch(API_BASE_URL + '/activities?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(activityData)
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error('Failed to add activity: ' + (errorText || response.statusText));
-    }
-    var data = await response.json();
-    // Ensure the activity includes the developer_id
-    const newActivityWithDeveloper = {
-      ...data,
-      developer_id: data.developer_id || parseInt(developerId) // Fallback to logged-in developerId
-    };
-    setActivities(activities.concat([newActivityWithDeveloper]));
-    // Update dropdownData.developers if the developer_id is not present
-    if (!dropdownData.developers.find(d => d.developer_id === newActivityWithDeveloper.developer_id)) {
-      setDropdownData({
-        ...dropdownData,
-        developers: [
-          ...dropdownData.developers,
-          {
-            developer_id: newActivityWithDeveloper.developer_id,
-            name: userName || `Developer ${newActivityWithDeveloper.developer_id}`
+      const handleAddActivity = async () => {
+        setLoading(true);
+        if (!newActivity.status || !['To_Do', 'In_Progress', 'Done'].includes(newActivity.status)) {
+          setError('Please select a valid status (To Do, In Progress, or Done).');
+          setLoading(false);
+          return;
+        }
+        if (!newActivity.project_id || !newActivity.task_id) {
+          setError('Please select a project and task.');
+          setLoading(false);
+          return;
+        }
+        const estimatedDays = parseInt(newActivity.estimated_days);
+        if (newActivity.estimated_days && (isNaN(estimatedDays) || estimatedDays < 0 || estimatedDays > 10000)) {
+          setError('Estimated days must be a number between 0 and 10,000.');
+          setLoading(false);
+          return;
+        }
+        if (newActivity.created_at && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(newActivity.created_at)) {
+          setError('Created At must be in the format YYYY-MM-DDThh:mm (e.g., 2025-07-16T08:59).');
+          setLoading(false);
+          return;
+        }
+        const activityData = {
+          project_id: parseInt(newActivity.project_id),
+          task_id: parseInt(newActivity.task_id),
+          details: newActivity.details || null,
+          status: newActivity.status,
+          estimated_days: estimatedDays || null,
+          created_at: newActivity.created_at || new Date().toISOString().slice(0, 16)
+        };
+        try {
+          const response = await fetch(`${API_BASE_URL}/activities?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(activityData)
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Failed to add activity: ' + (errorText || response.statusText));
           }
-        ]
-      });
-    }
-    setSuccess('Activity added successfully');
-    setNewActivity({ project_id: '', task_id: '', details: '', status: 'To_Do', estimated_days: '' });
-  } catch (err) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+          const data = await response.json();
+          const newActivityWithDeveloper = {
+            ...data,
+            developer_id: data.developer_id || parseInt(developerId)
+          };
+          setActivities([...activities, newActivityWithDeveloper]);
+          if (!dropdownData.developers.find(d => d.developer_id === newActivityWithDeveloper.developer_id)) {
+            setDropdownData({
+              ...dropdownData,
+              developers: [
+                ...dropdownData.developers,
+                {
+                  developer_id: newActivityWithDeveloper.developer_id,
+                  name: userName || `Developer ${newActivityWithDeveloper.developer_id}`
+                }
+              ]
+            });
+          }
+          setSuccess('Activity added successfully');
+          setNewActivity({ project_id: '', task_id: '', details: '', status: 'To_Do', estimated_days: '', created_at: '' });
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
 
-      var updateActivityStatus = async function(activityId, newStatus) {
+      const updateActivityStatus = async (activityId, newStatus) => {
         showConfirmation(
           'Confirm Status Update',
           'Are you sure you want to update the status of this activity?',
           async () => {
             setLoading(true);
             try {
-              var response = await fetch(API_BASE_URL + '/activities/' + activityId + '/status?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/activities/${activityId}/status?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus })
@@ -400,9 +428,9 @@ var handleAddActivity = async function(e) {
                 const errorText = await response.text();
                 throw new Error('Failed to update status: ' + (errorText || response.statusText));
               }
-              setActivities(activities.map(function(activity) {
-                return activity.activity_id === activityId ? { ...activity, status: newStatus } : activity;
-              }));
+              setActivities(activities.map(activity => 
+                activity.activity_id === activityId ? { ...activity, status: newStatus } : activity
+              ));
               setSuccess('Status updated successfully');
             } catch (err) {
               setError(err.message);
@@ -414,7 +442,7 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var updateActivity = async function(activity) {
+      const updateActivity = async (activity) => {
         if (permissions === 'medium' && parseInt(developerId) !== activity.developer_id) {
           setError('You can only edit the status of your own activities.');
           setLoading(false);
@@ -431,15 +459,21 @@ var handleAddActivity = async function(e) {
               setLoading(false);
               return;
             }
-            var activityData = permissions === 'medium' ? { status: activity.status } : {
+            if (activity.created_at && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(activity.created_at)) {
+              setError('Created At must be in the format YYYY-MM-DDThh:mm (e.g., 2025-07-16T08:59).');
+              setLoading(false);
+              return;
+            }
+            const activityData = permissions === 'medium' ? { status: activity.status } : {
               project_id: parseInt(activity.project_id),
               task_id: parseInt(activity.task_id),
               details: activity.details || null,
               status: activity.status,
-              estimated_days: estimatedDays || null
+              estimated_days: estimatedDays || null,
+              created_at: activity.created_at || new Date().toISOString().slice(0, 16)
             };
             try {
-              var response = await fetch(API_BASE_URL + '/activities/' + activity.activity_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/activities/${activity.activity_id}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(activityData)
@@ -448,8 +482,8 @@ var handleAddActivity = async function(e) {
                 const errorText = await response.text();
                 throw new Error('Failed to update activity: ' + (errorText || response.statusText));
               }
-              var data = await response.json();
-              setActivities(activities.map(function(a) { return a.activity_id === activity.activity_id ? data : a; }));
+              const data = await response.json();
+              setActivities(activities.map(a => a.activity_id === activity.activity_id ? data : a));
               setEditActivity(null);
               setSuccess('Activity updated successfully');
             } catch (err) {
@@ -462,22 +496,21 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var deleteActivity = async function(activityId) {
+      const deleteActivity = async (activityId) => {
         showConfirmation(
           'Confirm Activity Deletion',
           'Are you sure you want to delete this activity? This action cannot be undone.',
           async () => {
             setLoading(true);
             try {
-              var response = await fetch(API_BASE_URL + '/activities/' + activityId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/activities/${activityId}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'DELETE'
               });
               if (!response.ok) {
-          
                 const errorText = await response.text();
                 throw new Error('Failed to delete activity: ' + (errorText || response.statusText));
               }
-              setActivities(activities.filter(function(a) { return a.activity_id !== activityId; }));
+              setActivities(activities.filter(a => a.activity_id !== activityId));
               setSuccess('Activity deleted successfully');
             } catch (err) {
               setError(err.message);
@@ -489,15 +522,19 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var handleAddProject = async function(e) {
-        e.preventDefault();
+      const handleAddProject = async () => {
         setLoading(true);
         if (!newProject.status || !['Planning', 'In_Progress', 'On_Hold', 'Completed'].includes(newProject.status)) {
           setError('Please select a valid status (Planning, In Progress, On Hold, or Completed).');
           setLoading(false);
           return;
         }
-        var projectData = {
+        if (!newProject.name) {
+          setError('Project name is required.');
+          setLoading(false);
+          return;
+        }
+        const projectData = {
           name: newProject.name,
           description: newProject.description || null,
           status: newProject.status,
@@ -505,7 +542,7 @@ var handleAddActivity = async function(e) {
           priority: newProject.priority || null
         };
         try {
-          var response = await fetch(API_BASE_URL + '/projects?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+          const response = await fetch(`${API_BASE_URL}/projects?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(projectData)
@@ -514,9 +551,9 @@ var handleAddActivity = async function(e) {
             const errorText = await response.text();
             throw new Error('Failed to add project: ' + (errorText || response.statusText));
           }
-          var data = await response.json();
-          setProjects(projects.concat([data]));
-          setDropdownData({ ...dropdownData, projects: dropdownData.projects.concat([data]) });
+          const data = await response.json();
+          setProjects([...projects, data]);
+          setDropdownData({ ...dropdownData, projects: [...dropdownData.projects, data] });
           setSuccess('Project added successfully');
           setNewProject({ name: '', description: '', status: 'Planning', delivery_date: '', priority: '' });
         } catch (err) {
@@ -526,13 +563,13 @@ var handleAddActivity = async function(e) {
         }
       };
 
-      var updateProject = async function(project) {
+      const updateProject = async (project) => {
         showConfirmation(
           'Confirm Project Update',
           'Are you sure you want to update this project?',
           async () => {
             setLoading(true);
-            var projectData = {
+            const projectData = {
               name: project.name,
               description: project.description || null,
               status: project.status,
@@ -540,7 +577,7 @@ var handleAddActivity = async function(e) {
               priority: project.priority || null
             };
             try {
-              var response = await fetch(API_BASE_URL + '/projects/' + project.project_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/projects/${project.project_id}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(projectData)
@@ -549,11 +586,11 @@ var handleAddActivity = async function(e) {
                 const errorText = await response.text();
                 throw new Error('Failed to update project: ' + (errorText || response.statusText));
               }
-              var data = await response.json();
-              setProjects(projects.map(function(p) { return p.project_id === project.project_id ? data : p; }));
+              const data = await response.json();
+              setProjects(projects.map(p => p.project_id === project.project_id ? data : p));
               setDropdownData({
                 ...dropdownData,
-                projects: dropdownData.projects.map(function(p) { return p.project_id === project.project_id ? data : p; })
+                projects: dropdownData.projects.map(p => p.project_id === project.project_id ? data : p)
               });
               setEditProject(null);
               setSuccess('Project updated successfully');
@@ -567,25 +604,25 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var deleteProject = async function(projectId) {
+      const deleteProject = async (projectId) => {
         showConfirmation(
           'Confirm Project Deletion',
           'Are you sure you want to delete this project? This action cannot be undone.',
           async () => {
             setLoading(true);
             try {
-              var response = await fetch(API_BASE_URL + '/projects/' + projectId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/projects/${projectId}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'DELETE'
               });
-             if (!response.ok) {
-            const errorText = await response.text();
-            if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
-              throw new Error('Cannot delete project because it has associated activities. Please delete the activities first.');
-            }
-            throw new Error('Failed to delete project: ' + (errorText || response.statusText));
-          }
-              setProjects(projects.filter(function(p) { return p.project_id !== projectId; }));
-              setDropdownData({ ...dropdownData, projects: dropdownData.projects.filter(function(p) { return p.project_id !== projectId; }) });
+              if (!response.ok) {
+                const errorText = await response.text();
+                if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
+                  throw new Error('Cannot delete project because it has associated activities. Please delete the activities first.');
+                }
+                throw new Error('Failed to delete project: ' + (errorText || response.statusText));
+              }
+              setProjects(projects.filter(p => p.project_id !== projectId));
+              setDropdownData({ ...dropdownData, projects: dropdownData.projects.filter(p => p.project_id !== projectId) });
               setSuccess('Project deleted successfully');
             } catch (err) {
               setError(err.message);
@@ -597,15 +634,19 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var handleAddTask = async function(e) {
-        e.preventDefault();
+      const handleAddTask = async () => {
         setLoading(true);
-        var taskData = {
+        if (!newTask.title) {
+          setError('Task title is required.');
+          setLoading(false);
+          return;
+        }
+        const taskData = {
           title: newTask.title,
           description: newTask.description || null
         };
         try {
-          var response = await fetch(API_BASE_URL + '/tasks?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+          const response = await fetch(`${API_BASE_URL}/tasks?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(taskData)
@@ -614,9 +655,9 @@ var handleAddActivity = async function(e) {
             const errorText = await response.text();
             throw new Error('Failed to add task: ' + (errorText || response.statusText));
           }
-          var data = await response.json();
-          setTasks(tasks.concat([data]));
-          setDropdownData({ ...dropdownData, tasks: dropdownData.tasks.concat([data]) });
+          const data = await response.json();
+          setTasks([...tasks, data]);
+          setDropdownData({ ...dropdownData, tasks: [...dropdownData.tasks, data] });
           setSuccess('Task added successfully');
           setNewTask({ title: '', description: '' });
         } catch (err) {
@@ -626,18 +667,18 @@ var handleAddActivity = async function(e) {
         }
       };
 
-      var updateTask = async function(task) {
+      const updateTask = async (task) => {
         showConfirmation(
           'Confirm Task Update',
           'Are you sure you want to update this task?',
           async () => {
             setLoading(true);
-            var taskData = {
+            const taskData = {
               title: task.title,
               description: task.description || null
             };
             try {
-              var response = await fetch(API_BASE_URL + '/tasks/' + task.task_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/tasks/${task.task_id}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(taskData)
@@ -646,11 +687,11 @@ var handleAddActivity = async function(e) {
                 const errorText = await response.text();
                 throw new Error('Failed to update task: ' + (errorText || response.statusText));
               }
-              var data = await response.json();
-              setTasks(tasks.map(function(t) { return t.task_id === task.task_id ? data : t; }));
+              const data = await response.json();
+              setTasks(tasks.map(t => t.task_id === task.task_id ? data : t));
               setDropdownData({
                 ...dropdownData,
-                tasks: dropdownData.tasks.map(function(t) { return t.task_id === task.task_id ? data : t; })
+                tasks: dropdownData.tasks.map(t => t.task_id === task.task_id ? data : t)
               });
               setEditTask(null);
               setSuccess('Task updated successfully');
@@ -664,25 +705,25 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var deleteTask = async function(taskId) {
+      const deleteTask = async (taskId) => {
         showConfirmation(
           'Confirm Task Deletion',
           'Are you sure you want to delete this task? This action cannot be undone.',
           async () => {
             setLoading(true);
             try {
-              var response = await fetch(API_BASE_URL + '/tasks/' + taskId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/tasks/${taskId}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'DELETE'
               });
               if (!response.ok) {
                 const errorText = await response.text();
                 if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
-              throw new Error('Cannot delete task because it has associated activities. Please delete the activities first.');
-            }
+                  throw new Error('Cannot delete task because it has associated activities. Please delete the activities first.');
+                }
                 throw new Error('Failed to delete task: ' + (errorText || response.statusText));
               }
-              setTasks(tasks.filter(function(t) { return t.task_id !== taskId; }));
-              setDropdownData({ ...dropdownData, tasks: dropdownData.tasks.filter(function(t) { return t.task_id !== taskId; }) });
+              setTasks(tasks.filter(t => t.task_id !== taskId));
+              setDropdownData({ ...dropdownData, tasks: dropdownData.tasks.filter(t => t.task_id !== taskId) });
               setSuccess('Task deleted successfully');
             } catch (err) {
               setError(err.message);
@@ -694,15 +735,19 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var handleAddDeveloper = async function(e) {
-        e.preventDefault();
+      const handleAddDeveloper = async () => {
         setLoading(true);
+        if (!newDeveloper.first_name || !newDeveloper.last_name || !newDeveloper.email || !newDeveloper.password) {
+          setError('All fields except permissions are required.');
+          setLoading(false);
+          return;
+        }
         if (newDeveloper.password.length > 50) {
           setError('Password must be 50 characters or less.');
           setLoading(false);
           return;
         }
-        var developerData = {
+        const developerData = {
           first_name: newDeveloper.first_name,
           last_name: newDeveloper.last_name,
           email: newDeveloper.email,
@@ -710,7 +755,7 @@ var handleAddActivity = async function(e) {
           permissions: newDeveloper.permissions
         };
         try {
-          var response = await fetch(API_BASE_URL + '/developers?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+          const response = await fetch(`${API_BASE_URL}/developers?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(developerData)
@@ -719,7 +764,7 @@ var handleAddActivity = async function(e) {
             const errorText = await response.text();
             throw new Error('Failed to add developer: ' + (errorText || response.statusText));
           }
-          var data = await response.json();
+          const data = await response.json();
           const newDev = {
             developer_id: data.developer_id,
             first_name: data.first_name,
@@ -728,8 +773,8 @@ var handleAddActivity = async function(e) {
             email: data.email,
             permissions: data.permissions
           };
-          setDevelopers(developers.concat([newDev]));
-          setDropdownData({ ...dropdownData, developers: dropdownData.developers.concat([newDev]) });
+          setDevelopers([...developers, newDev]);
+          setDropdownData({ ...dropdownData, developers: [...dropdownData.developers, newDev] });
           setSuccess('Developer added successfully');
           setNewDeveloper({ first_name: '', last_name: '', email: '', password: '', permissions: 'low' });
         } catch (err) {
@@ -739,7 +784,7 @@ var handleAddActivity = async function(e) {
         }
       };
 
-      var updateDeveloper = async function(developer) {
+      const updateDeveloper = async (developer) => {
         if (developer.permissions === 'high') {
           setError('Cannot edit a developer with high permissions');
           return;
@@ -754,7 +799,7 @@ var handleAddActivity = async function(e) {
               setLoading(false);
               return;
             }
-            var developerData = {
+            const developerData = {
               first_name: developer.first_name,
               last_name: developer.last_name,
               email: developer.email,
@@ -764,7 +809,7 @@ var handleAddActivity = async function(e) {
               developerData.password = developer.password;
             }
             try {
-              var response = await fetch(API_BASE_URL + '/developers/' + developer.developer_id + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/developers/${developer.developer_id}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(developerData)
@@ -773,7 +818,7 @@ var handleAddActivity = async function(e) {
                 const errorText = await response.text();
                 throw new Error('Failed to update developer: ' + (errorText || response.statusText));
               }
-              var data = await response.json();
+              const data = await response.json();
               const updatedDev = {
                 developer_id: data.developer_id,
                 first_name: data.first_name,
@@ -782,12 +827,12 @@ var handleAddActivity = async function(e) {
                 email: data.email,
                 permissions: data.permissions
               };
-              setDevelopers(developers.map(function(d) { return d.developer_id === developer.developer_id ? updatedDev : d; }));
+              setDevelopers(developers.map(d => d.developer_id === developer.developer_id ? updatedDev : d));
               setDropdownData({
                 ...dropdownData,
-                developers: dropdownData.developers.map(function(d) {
-                  return d.developer_id === developer.developer_id ? { developer_id: data.developer_id, name: `${data.first_name} ${data.last_name}`.trim() || `Developer ${data.developer_id}` } : d;
-                })
+                developers: dropdownData.developers.map(d => 
+                  d.developer_id === developer.developer_id ? { developer_id: data.developer_id, name: `${data.first_name} ${data.last_name}`.trim() || `Developer ${data.developer_id}` } : d
+                )
               });
               setEditDeveloper(null);
               setSuccess('Developer updated successfully');
@@ -801,8 +846,8 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var deleteDeveloper = async function(developerId) {
-        const developer = developers.find(function(d) { return d.developer_id === developerId; });
+      const deleteDeveloper = async (developerId) => {
+        const developer = developers.find(d => d.developer_id === developerId);
         if (developer && developer.permissions === 'high') {
           setError('Cannot delete a developer with high permissions');
           return;
@@ -813,18 +858,18 @@ var handleAddActivity = async function(e) {
           async () => {
             setLoading(true);
             try {
-              var response = await fetch(API_BASE_URL + '/developers/' + developerId + '?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password), {
+              const response = await fetch(`${API_BASE_URL}/developers/${developerId}?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
                 method: 'DELETE'
               });
               if (!response.ok) {
-                            if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
-              throw new Error('Cannot delete developer because it has associated activities. Please delete the activities first.');
-            }
                 const errorText = await response.text();
+                if (errorText.includes('Cannot delete or update a parent row') || errorText.includes('1451')) {
+                  throw new Error('Cannot delete developer because it has associated activities. Please delete the activities first.');
+                }
                 throw new Error('Failed to delete developer: ' + (errorText || response.statusText));
               }
-              setDevelopers(developers.filter(function(d) { return d.developer_id !== developerId; }));
-              setDropdownData({ ...dropdownData, developers: dropdownData.developers.filter(function(d) { return d.developer_id !== developerId; }) });
+              setDevelopers(developers.filter(d => d.developer_id !== developerId));
+              setDropdownData({ ...dropdownData, developers: dropdownData.developers.filter(d => d.developer_id !== developerId) });
               setSuccess('Developer deleted successfully');
             } catch (err) {
               setError(err.message);
@@ -836,23 +881,22 @@ var handleAddActivity = async function(e) {
         );
       };
 
-      var getProjectName = function(id) {
-        var project = dropdownData.projects.find(function(p) { return p.project_id === id; });
-        return project ? project.name + ' (ID: ' + project.project_id + ')' : 'Project ' + id;
+      const getProjectName = (id) => {
+        const project = dropdownData.projects.find(p => p.project_id === id);
+        return project ? `${project.name} (ID: ${project.project_id})` : `Project ${id}`;
       };
 
-      var getTaskTitle = function(id) {
-        var task = dropdownData.tasks.find(function(t) { return t.task_id === id; });
-        return task ? task.title + ' (ID: ' + task.task_id + ')' : 'Task ' + id;
+      const getTaskTitle = (id) => {
+        const task = dropdownData.tasks.find(t => t.task_id === id);
+        return task ? `${task.title} (ID: ${task.task_id})` : `Task ${id}`;
       };
 
-      var getDeveloperName = function(id) {
-        var developer = dropdownData.developers.find(function(d) { return d.developer_id === id; });
-        console.log(`Looking up developer ID ${id}:`, developer);
+      const getDeveloperName = (id) => {
+        const developer = dropdownData.developers.find(d => d.developer_id === id);
         return developer && developer.name && developer.name.trim() ? developer.name : `Developer ${id}`;
       };
 
-      var handleLogout = function() {
+      const handleLogout = () => {
         localStorage.clear();
         window.location.href = 'login.html';
       };
@@ -877,29 +921,92 @@ var handleAddActivity = async function(e) {
             onCancel={modal.onCancel}
           />
           {!loading && (
-            <React.Fragment>
+            <>
               <div className="mb-6">
                 <div className="flex space-x-4 border-b">
-                  <button onClick={() => handleTabChange('activities')} className={`px-4 py-2 font-medium ${activeTab === 'activities' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}>Activities</button>
+                  <button 
+                    onClick={() => handleTabChange('activities')} 
+                    className={`px-4 py-2 font-medium ${activeTab === 'activities' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                  >
+                    Activities
+                  </button>
                   {(permissions === 'medium' || permissions === 'high') && (
-                    <React.Fragment>
-                      <button onClick={() => handleTabChange('projects')} className={`px-4 py-2 font-medium ${activeTab === 'projects' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}>Projects</button>
-                      <button onClick={() => handleTabChange('tasks')} className={`px-4 py-2 font-medium ${activeTab === 'tasks' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}>Tasks</button>
-                    </React.Fragment>
+                    <>
+                      <button 
+                        onClick={() => handleTabChange('projects')} 
+                        className={`px-4 py-2 font-medium ${activeTab === 'projects' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                      >
+                        Projects
+                      </button>
+                      <button 
+                        onClick={() => handleTabChange('tasks')} 
+                        className={`px-4 py-2 font-medium ${activeTab === 'tasks' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                      >
+                        Tasks
+                      </button>
+                    </>
                   )}
                   {permissions === 'high' && (
-                    <button onClick={() => handleTabChange('developers')} className={`px-4 py-2 font-medium ${activeTab === 'developers' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}>Developers</button>
+                    <>
+                      <button 
+                        onClick={() => handleTabChange('developers')} 
+                        className={`px-4 py-2 font-medium ${activeTab === 'developers' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                      >
+                        Developers
+                      </button>
+                      <button 
+                        onClick={() => handleTabChange('logs')} 
+                        className={`px-4 py-2 font-medium ${activeTab === 'logs' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                      >
+                        Logs
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
+
+              {activeTab === 'logs' && permissions === 'high' && (
+                <>
+                  <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">System Logs</h2>
+                  {logs.length === 0 ? (
+                    <p className="text-gray-600 mb-6">No logs available.</p>
+                  ) : (
+                    <div className="p-4 bg-white rounded-lg shadow mb-8 overflow-x-auto">
+                      <table className="w-full border-collapse min-w-[600px]">
+                        <thead>
+                          <tr className="bg-gray-200">
+                            <th className="p-2 text-xs md:text-sm font-medium text-gray-700">Log ID</th>
+                            <th className="p-2 text-xs md:text-sm font-medium text-gray-700">Developer</th>
+                            <th className="p-2 text-xs md:text-sm font-medium text-gray-700">Action</th>
+                            <th className="p-2 text-xs md:text-sm font-medium text-gray-700">Description</th>
+                            <th className="p-2 text-xs md:text-sm font-medium text-gray-700">Logged At</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {logs.map(log => (
+                            <tr key={log.log_id} className="border-b">
+                              <td className="p-2 text-xs md:text-sm text-gray-600">{log.log_id}</td>
+                              <td className="p-2 text-xs md:text-sm text-gray-600">{getDeveloperName(log.developer_id)}</td>
+                              <td className="p-2 text-xs md:text-sm text-gray-600">{log.action}</td>
+                              <td className="p-2 text-xs md:text-sm text-gray-600">{log.description || '-'}</td>
+                              <td className="p-2 text-xs md:text-sm text-gray-600">{new Date(log.log_at).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+
               {activeTab === 'activities' && (
-                <React.Fragment>
+                <>
                   <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">{permissions === 'high' ? 'All Activities' : 'Your Activities'}</h2>
                   {activities.length === 0 ? (
                     <p className="text-gray-600 mb-6">No activities found.</p>
                   ) : (
                     <div className="p-4 bg-white rounded-lg shadow mb-8 overflow-x-auto">
-                      <table className="w-full border-collapse min-w-[600px]">
+                      <table className="w-full border-collapse min-w-[700px]">
                         <thead>
                           <tr className="bg-gray-200">
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Developer</th>
@@ -908,10 +1015,14 @@ var handleAddActivity = async function(e) {
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
                             <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Est. Days</th>
+                            <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Created At</th>
+                            {(permissions === 'high' || permissions === 'medium') && (
+                              <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Actions</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
-                          {activities.map(function(activity) {
+                          {activities.map(activity => {
                             const canEdit = permissions === 'high';
                             return (
                               <tr key={activity.activity_id} className="border-b">
@@ -921,22 +1032,22 @@ var handleAddActivity = async function(e) {
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.details || '-'}</td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm">
                                   <select
-  value={activity.status}
-  onChange={(e) => updateActivityStatus(activity.activity_id, e.target.value)}
-  className={`w-full p-1 rounded border text-xs md:text-sm
-    ${((permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id)
-      ? 'bg-gray-300 text-gray-800 border-gray-500 opacity-100 cursor-not-allowed'
-      : 'border-gray-300'}
-  `}
-  disabled={(permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id}
->
-  <option value="To_Do">To Do</option>
-  <option value="In_Progress">In Progress</option>
-  <option value="Done">Done</option>
-</select>
-
+                                    value={activity.status}
+                                    onChange={(e) => updateActivityStatus(activity.activity_id, e.target.value)}
+                                    className={`w-full p-1 rounded border text-xs md:text-sm
+                                      ${((permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id)
+                                        ? 'bg-gray-300 text-gray-800 border-gray-500 opacity-100 cursor-not-allowed'
+                                        : 'border-gray-300'}
+                                    `}
+                                    disabled={(permissions === 'low' || permissions === 'medium') && parseInt(developerId) !== activity.developer_id}
+                                  >
+                                    <option value="To_Do">To Do</option>
+                                    <option value="In_Progress">In Progress</option>
+                                    <option value="Done">Done</option>
+                                  </select>
                                 </td>
                                 <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
+                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.created_at ? new Date(activity.created_at).toLocaleString() : '-'}</td>
                                 {(permissions === 'high' || permissions === 'medium') && (
                                   <td className="p-2 md:p-3 text-xs md:text-sm">
                                     {canEdit && (
@@ -955,7 +1066,7 @@ var handleAddActivity = async function(e) {
                     </div>
                   )}
                   <h3 ref={activityFormRef} className="text-md md:text-lg font-semibold mb-4 text-gray-700">{editActivity ? 'Edit Activity' : 'Add New Activity'}</h3>
-                  <form onSubmit={editActivity ? (e) => { e.preventDefault(); updateActivity(editActivity); } : handleAddActivity} className="space-y-4 mb-8">
+                  <div className="space-y-4 mb-8">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Project</label>
                       <select
@@ -966,9 +1077,9 @@ var handleAddActivity = async function(e) {
                         disabled={editActivity && permissions === 'medium'}
                       >
                         <option value="">Select Project</option>
-                        {dropdownData.projects.map(function(project) {
-                          return <option key={project.project_id} value={project.project_id}>{project.name} (ID: {project.project_id})</option>;
-                        })}
+                        {dropdownData.projects.map(project => (
+                          <option key={project.project_id} value={project.project_id}>{project.name} (ID: {project.project_id})</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -981,9 +1092,9 @@ var handleAddActivity = async function(e) {
                         disabled={editActivity && permissions === 'medium'}
                       >
                         <option value="">Select Task</option>
-                        {dropdownData.tasks.map(function(task) {
-                          return <option key={task.task_id} value={task.task_id}>{task.title} (ID: {task.task_id})</option>;
-                        })}
+                        {dropdownData.tasks.map(task => (
+                          <option key={task.task_id} value={task.task_id}>{task.title} (ID: {task.task_id})</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -1021,15 +1132,35 @@ var handleAddActivity = async function(e) {
                         disabled={editActivity && permissions === 'medium'}
                       />
                     </div>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editActivity ? 'Update Activity' : 'Add Activity'}</button>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Created At (YYYY-MM-DDThh:mm, optional)</label>
+                      <input
+                        type="datetime-local"
+                        value={editActivity ? editActivity.created_at || '' : newActivity.created_at}
+                        onChange={(e) => editActivity ? setEditActivity({ ...editActivity, created_at: e.target.value }) : setNewActivity({ ...newActivity, created_at: e.target.value })}
+                        className="w-full p-2 border rounded-lg text-sm"
+                        disabled={editActivity && permissions === 'medium'}
+                      />
+                    </div>
+                    <button 
+                      onClick={editActivity ? () => updateActivity(editActivity) : handleAddActivity} 
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editActivity ? 'Update Activity' : 'Add Activity'}
+                    </button>
                     {editActivity && (
-                      <button type="button" onClick={() => setEditActivity(null)} className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel Edit</button>
+                      <button 
+                        onClick={() => setEditActivity(null)} 
+                        className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      >
+                        Cancel Edit
+                      </button>
                     )}
-                  </form>
-                </React.Fragment>
+                  </div>
+                </>
               )}
               {activeTab === 'projects' && (permissions === 'medium' || permissions === 'high') && (
-                <React.Fragment>
+                <>
                   <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">Projects</h2>
                   {projects.length === 0 ? (
                     <p className="text-gray-600 mb-6">No projects found.</p>
@@ -1049,29 +1180,27 @@ var handleAddActivity = async function(e) {
                           </tr>
                         </thead>
                         <tbody>
-                          {projects.map(function(project) {
-                            return (
-                              <tr key={project.project_id} className="border-b">
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.name}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.description || '-'}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.status}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.delivery_date || '-'}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.priority || '-'}</td>
-                                {permissions === 'high' && (
-                                  <td className="p-2 md:p-3 text-xs md:text-sm">
-                                    <button onClick={() => handleEditProject(project)} className="text-blue-600 hover:underline mr-2">Edit</button>
-                                    <button onClick={() => deleteProject(project.project_id)} className="text-red-600 hover:underline">Delete</button>
-                                  </td>
-                                )}
-                              </tr>
-                            );
-                          })}
+                          {projects.map(project => (
+                            <tr key={project.project_id} className="border-b">
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.name}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.description || '-'}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.status}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.delivery_date || '-'}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.priority || '-'}</td>
+                              {permissions === 'high' && (
+                                <td className="p-2 md:p-3 text-xs md:text-sm">
+                                  <button onClick={() => handleEditProject(project)} className="text-blue-600 hover:underline mr-2">Edit</button>
+                                  <button onClick={() => deleteProject(project.project_id)} className="text-red-600 hover:underline">Delete</button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
                   )}
                   <h3 ref={projectFormRef} className="text-md md:text-lg font-semibold mb-4 text-gray-700">{editProject ? 'Edit Project' : 'Add New Project'}</h3>
-                  <form onSubmit={editProject ? (e) => { e.preventDefault(); updateProject(editProject); } : handleAddProject} className="space-y-4 mb-8">
+                  <div className="space-y-4 mb-8">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Name</label>
                       <input
@@ -1127,15 +1256,25 @@ var handleAddActivity = async function(e) {
                         <option value="High">High</option>
                       </select>
                     </div>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editProject ? 'Update Project' : 'Add Project'}</button>
+                    <button 
+                      onClick={editProject ? () => updateProject(editProject) : handleAddProject} 
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editProject ? 'Update Project' : 'Add Project'}
+                    </button>
                     {editProject && (
-                      <button type="button" onClick={() => setEditProject(null)} className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel Edit</button>
+                      <button 
+                        onClick={() => setEditProject(null)} 
+                        className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      >
+                        Cancel Edit
+                      </button>
                     )}
-                  </form>
-                </React.Fragment>
+                  </div>
+                </>
               )}
               {activeTab === 'tasks' && (permissions === 'medium' || permissions === 'high') && (
-                <React.Fragment>
+                <>
                   <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">Tasks</h2>
                   {tasks.length === 0 ? (
                     <p className="text-gray-600 mb-6">No tasks found.</p>
@@ -1152,26 +1291,24 @@ var handleAddActivity = async function(e) {
                           </tr>
                         </thead>
                         <tbody>
-                          {tasks.map(function(task) {
-                            return (
-                              <tr key={task.task_id} className="border-b">
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.title}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.description || '-'}</td>
-                                {permissions === 'high' && (
-                                  <td className="p-2 md:p-3 text-xs md:text-sm">
-                                    <button onClick={() => handleEditTask(task)} className="text-blue-600 hover:underline mr-2">Edit</button>
-                                    <button onClick={() => deleteTask(task.task_id)} className="text-red-600 hover:underline">Delete</button>
-                                  </td>
-                                )}
-                              </tr>
-                            );
-                          })}
+                          {tasks.map(task => (
+                            <tr key={task.task_id} className="border-b">
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.title}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.description || '-'}</td>
+                              {permissions === 'high' && (
+                                <td className="p-2 md:p-3 text-xs md:text-sm">
+                                  <button onClick={() => handleEditTask(task)} className="text-blue-600 hover:underline mr-2">Edit</button>
+                                  <button onClick={() => deleteTask(task.task_id)} className="text-red-600 hover:underline">Delete</button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
                   )}
                   <h3 ref={taskFormRef} className="text-md md:text-lg font-semibold mb-4 text-gray-700">{editTask ? 'Edit Task' : 'Add New Task'}</h3>
-                  <form onSubmit={editTask ? (e) => { e.preventDefault(); updateTask(editTask); } : handleAddTask} className="space-y-4 mb-8">
+                  <div className="space-y-4 mb-8">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Title</label>
                       <input
@@ -1191,15 +1328,25 @@ var handleAddActivity = async function(e) {
                         className="w-full p-2 border rounded-lg text-sm"
                       />
                     </div>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editTask ? 'Update Task' : 'Add Task'}</button>
+                    <button 
+                      onClick={editTask ? () => updateTask(editTask) : handleAddTask} 
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editTask ? 'Update Task' : 'Add Task'}
+                    </button>
                     {editTask && (
-                      <button type="button" onClick={() => setEditTask(null)} className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel Edit</button>
+                      <button 
+                        onClick={() => setEditTask(null)} 
+                        className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      >
+                        Cancel Edit
+                      </button>
                     )}
-                  </form>
-                </React.Fragment>
+                  </div>
+                </>
               )}
               {activeTab === 'developers' && permissions === 'high' && (
-                <React.Fragment>
+                <>
                   <h2 className="text-lg md:text-xl font-semibold mb-6 text-gray-700">Developers</h2>
                   {developers.length === 0 ? (
                     <p className="text-gray-600 mb-6">No developers found.</p>
@@ -1215,37 +1362,35 @@ var handleAddActivity = async function(e) {
                           </tr>
                         </thead>
                         <tbody>
-                          {developers.map(function(developer) {
-                            return (
-                              <tr key={developer.developer_id} className="border-b">
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.name}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.email}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.permissions}</td>
-                                <td className="p-2 md:p-3 text-xs md:text-sm">
-                                  <button
-                                    onClick={() => handleEditDeveloper(developer)}
-                                    className={`mr-2 ${developer.permissions === 'high' ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:underline'}`}
-                                    disabled={developer.permissions === 'high'}
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => deleteDeveloper(developer.developer_id)}
-                                    className={`mr-2 ${developer.permissions === 'high' ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:underline'}`}
-                                    disabled={developer.permissions === 'high'}
-                                  >
-                                    Delete
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                          {developers.map(developer => (
+                            <tr key={developer.developer_id} className="border-b">
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.name}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.email}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{developer.permissions}</td>
+                              <td className="p-2 md:p-3 text-xs md:text-sm">
+                                <button
+                                  onClick={() => handleEditDeveloper(developer)}
+                                  className={`mr-2 ${developer.permissions === 'high' ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:underline'}`}
+                                  disabled={developer.permissions === 'high'}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => deleteDeveloper(developer.developer_id)}
+                                  className={`mr-2 ${developer.permissions === 'high' ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:underline'}`}
+                                  disabled={developer.permissions === 'high'}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
                   )}
                   <h3 ref={developerFormRef} className="text-md md:text-lg font-semibold mb-4 text-gray-700">{editDeveloper ? 'Edit Developer' : 'Add New Developer'}</h3>
-                  <form onSubmit={editDeveloper ? (e) => { e.preventDefault(); updateDeveloper(editDeveloper); } : handleAddDeveloper} className="space-y-4 mb-8">
+                  <div className="space-y-4 mb-8">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">First Name</label>
                       <input
@@ -1301,21 +1446,35 @@ var handleAddActivity = async function(e) {
                         <option value="high">High</option>
                       </select>
                     </div>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">{editDeveloper ? 'Update Developer' : 'Add Developer'}</button>
+                    <button 
+                      onClick={editDeveloper ? () => updateDeveloper(editDeveloper) : handleAddDeveloper} 
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editDeveloper ? 'Update Developer' : 'Add Developer'}
+                    </button>
                     {editDeveloper && (
-                      <button type="button" onClick={() => setEditDeveloper(null)} className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel Edit</button>
+                      <button 
+                        onClick={() => setEditDeveloper(null)} 
+                        className="ml-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      >
+                        Cancel Edit
+                      </button>
                     )}
-                  </form>
-                </React.Fragment>
+                  </div>
+                </>
               )}
-            </React.Fragment>
+            </>
           )}
         </div>
       );
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<Homepage />);
+    root.render(
+      <ErrorBoundary>
+        <Homepage />
+      </ErrorBoundary>
+    );
   </script>
 </body>
 </html>
