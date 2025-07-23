@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -155,23 +116,34 @@
               if (!response.ok) {
                 throw new Error('Stored credentials are invalid');
               }
-              fetchData('summary', setSummary, 'Failed to load summary data');
-              fetchData('project-status', setProjectStatus, 'Failed to load project status data');
-              fetchData('activity-status', setActivityStatus, 'Failed to load activity status data');
-              fetchData('daily-activities', setDailyActivities, 'Failed to load daily activities data');
-              fetchData('top-developers', setTopDevelopers, 'Failed to load top developers data');
-              fetchData('tasks-without-activities', setTasksWithoutActivities, 'Failed to load tasks without activities data');
-              fetchData('project-priority', setProjectPriority, 'Failed to load project priority data');
-              fetchData('avg-estimated-days', setAvgEstimatedDays, 'Failed to load average estimated days data');
-              fetchData('upcoming-deadlines', setUpcomingDeadlines, 'Failed to load upcoming deadlines data');
-              fetchData('project-activity-status', setProjectActivityStatus, 'Failed to load project activity status data');
-              fetchData('activities2', setActivities, 'Failed to load activities data');
-              fetchData('latest-projects', setLatestProjects, 'Failed to load latest projects data');
-              fetchData('project-activities', setProjectActivities, 'Failed to load project activities data');
-              fetchData('project-developers', setProjectDevelopers, 'Failed to load project developers data');
-              fetchData('latest-activities-by-status', setLatestActivitiesByStatus, 'Failed to load latest activities by status data');
-              fetchData('developer-tasks', setDeveloperTasks, 'Failed to load developer tasks data');
-              fetchData('active-tasks', setActiveTasks, 'Failed to load active tasks data');
+              const endpoints = [
+                { endpoint: 'summary', setter: setSummary, errorMsg: 'Failed to load summary data', defaultData: {} },
+                { endpoint: 'project-status', setter: setProjectStatus, errorMsg: 'Failed to load project status data', defaultData: [] },
+                { endpoint: 'activity-status', setter: setActivityStatus, errorMsg: 'Failed to load activity status data', defaultData: [] },
+                { endpoint: 'daily-activities', setter: setDailyActivities, errorMsg: 'Failed to load daily activities data', defaultData: [] },
+                { endpoint: 'top-developers', setter: setTopDevelopers, errorMsg: 'Failed to load top developers data', defaultData: [] },
+                { endpoint: 'tasks-without-activities', setter: setTasksWithoutActivities, errorMsg: 'Failed to load tasks without activities data', defaultData: [] },
+                { endpoint: 'project-priority', setter: setProjectPriority, errorMsg: 'Failed to load project priority data', defaultData: [] },
+                { endpoint: 'avg-estimated-days', setter: setAvgEstimatedDays, errorMsg: 'Failed to load average estimated days data', defaultData: [] },
+                { endpoint: 'upcoming-deadlines', setter: setUpcomingDeadlines, errorMsg: 'Failed to load upcoming deadlines data', defaultData: [] },
+                { endpoint: 'project-activity-status', setter: setProjectActivityStatus, errorMsg: 'Failed to load project activity status data', defaultData: {} },
+                { endpoint: 'activities2', setter: setActivities, errorMsg: 'Failed to load activities data', defaultData: [] },
+                { endpoint: 'latest-projects', setter: setLatestProjects, errorMsg: 'Failed to load latest projects data', defaultData: [] },
+                { endpoint: 'project-activities', setter: setProjectActivities, errorMsg: 'Failed to load project activities data', defaultData: [] },
+                { endpoint: 'project-developers', setter: setProjectDevelopers, errorMsg: 'Failed to load project developers data', defaultData: [] },
+                { endpoint: 'latest-activities-by-status', setter: setLatestActivitiesByStatus, errorMsg: 'Failed to load latest activities by status data', defaultData: { To_Do: [], In_Progress: [], Done: [] } },
+                { endpoint: 'developer-tasks', setter: setDeveloperTasks, errorMsg: 'Failed to load developer tasks data', defaultData: [] },
+                { endpoint: 'active-tasks', setter: setActiveTasks, errorMsg: 'Failed to load active tasks data', defaultData: [] },
+                { endpoint: 'dropdown-data', setter: setDropdownData, errorMsg: 'Failed to load dropdown data', defaultData: { developers: [], projects: [], tasks: [] } },
+              ];
+
+              endpoints.reduce((promise, { endpoint, setter, errorMsg, defaultData }) => {
+                return promise.then(() => new Promise(resolve => {
+                  setTimeout(() => {
+                    fetchData(endpoint, setter, errorMsg, defaultData).then(resolve);
+                  }, 100);
+                }));
+              }, Promise.resolve());
             })
             .catch(err => {
               console.error('Session validation error:', err);
@@ -185,31 +157,45 @@
         }
       }, []);
 
-      function fetchData(endpoint, setter, errorMsg, isAuth = true) {
+      // Retry fetching dropdown-data when viewing Activities tab and dropdownData is empty
+      React.useEffect(() => {
+        if (isAuthenticated && view === 'activities' && 
+            dropdownData.developers.length === 0 && 
+            dropdownData.projects.length === 0 && 
+            dropdownData.tasks.length === 0) {
+          console.log('Retrying dropdown-data fetch due to empty dropdownData');
+          fetchData('dropdown-data', setDropdownData, 'Failed to load dropdown data', { developers: [], projects: [], tasks: [] });
+        }
+      }, [view, isAuthenticated, dropdownData]);
+
+      function fetchData(endpoint, setter, errorMsg, defaultData, isAuth = true) {
         if (!isAuth) {
           setError('Please log in to access the dashboard');
-          return;
+          return Promise.resolve({ error: true });
         }
-         const storedEmail = localStorage.getItem('email');
-const storedPassword = localStorage.getItem('password');
+        const storedEmail = localStorage.getItem('email');
+        const storedPassword = localStorage.getItem('password');
 
-fetch('https://fastapi.engineeringdevelopment.online/' + endpoint + '?email=' + encodeURIComponent(storedEmail) + '&password=' + encodeURIComponent(storedPassword))
- .then(response => {
-            console.log(endpoint + ' response status:', response.status, response.statusText);
+        return fetch('https://fastapi.engineeringdevelopment.online/' + endpoint + '?email=' + encodeURIComponent(storedEmail) + '&password=' + encodeURIComponent(storedPassword))
+          .then(response => {
+            console.log(`${endpoint} response status: ${response.status} ${response.statusText}`);
             if (!response.ok) {
-              if (response.status === 401) throw new Error('Invalid credentials. Please log in again.');
-              if (response.status === 403) throw new Error('Insufficient permissions to access this data');
-              throw new Error('HTTP error! Status: ' + response.status + ' ' + response.statusText);
+              return response.text().then(text => {
+                if (response.status === 401) throw new Error('Invalid credentials. Please log in again.');
+                if (response.status === 403) throw new Error('Insufficient permissions to access this data');
+                throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}. Response: ${text}`);
+              });
             }
             return response.json();
           })
           .then(data => {
-            console.log(endpoint + ' data received:', data);
+            console.log(`${endpoint} data received:`, data);
             setter(data);
+            return { error: false };
           })
           .catch(err => {
-            console.error('Error fetching ' + endpoint + ':', err);
-            setError(errorMsg + ': ' + err.message);
+            console.error(`Error fetching ${endpoint}:`, err.message);
+            setError(`${errorMsg}: ${err.message}`);
             if (err.message.includes('Invalid credentials')) {
               setIsAuthenticated(false);
               setView('login');
@@ -217,6 +203,7 @@ fetch('https://fastapi.engineeringdevelopment.online/' + endpoint + '?email=' + 
               localStorage.removeItem('password');
               localStorage.removeItem('isAuthenticated');
             }
+            return { error: true };
           });
       }
 
@@ -229,8 +216,10 @@ fetch('https://fastapi.engineeringdevelopment.online/' + endpoint + '?email=' + 
         })
           .then(response => {
             if (!response.ok) {
-              if (response.status === 401) throw new Error('Invalid email or password');
-              throw new Error('HTTP error! Status: ' + response.status);
+              return response.text().then(text => {
+                if (response.status === 401) throw new Error('Invalid email or password');
+                throw new Error(`HTTP error! Status: ${response.status} ${text}`);
+              });
             }
             return response.json();
           })
@@ -241,23 +230,34 @@ fetch('https://fastapi.engineeringdevelopment.online/' + endpoint + '?email=' + 
             localStorage.setItem('email', email);
             localStorage.setItem('password', password);
             localStorage.setItem('isAuthenticated', 'true');
-            fetchData('summary', setSummary, 'Failed to load summary data');
-            fetchData('project-status', setProjectStatus, 'Failed to load project status data');
-            fetchData('activity-status', setActivityStatus, 'Failed to load activity status data');
-            fetchData('daily-activities', setDailyActivities, 'Failed to load daily activities data');
-            fetchData('top-developers', setTopDevelopers, 'Failed to load top developers data');
-            fetchData('tasks-without-activities', setTasksWithoutActivities, 'Failed to load tasks without activities data');
-            fetchData('project-priority', setProjectPriority, 'Failed to load project priority data');
-            fetchData('avg-estimated-days', setAvgEstimatedDays, 'Failed to load average estimated days data');
-            fetchData('upcoming-deadlines', setUpcomingDeadlines, 'Failed to load upcoming deadlines data');
-            fetchData('project-activity-status', setProjectActivityStatus, 'Failed to load project activity status data');
-            fetchData('activities2', setActivities, 'Failed to load activities data');
-            fetchData('latest-projects', setLatestProjects, 'Failed to load latest projects data');
-            fetchData('project-activities', setProjectActivities, 'Failed to load project activities data');
-            fetchData('project-developers', setProjectDevelopers, 'Failed to load project developers data');
-            fetchData('latest-activities-by-status', setLatestActivitiesByStatus, 'Failed to load latest activities by status data');
-            fetchData('developer-tasks', setDeveloperTasks, 'Failed to load developer tasks data');
-            fetchData('active-tasks', setActiveTasks, 'Failed to load active tasks data');
+            const endpoints = [
+              { endpoint: 'summary', setter: setSummary, errorMsg: 'Failed to load summary data', defaultData: {} },
+              { endpoint: 'project-status', setter: setProjectStatus, errorMsg: 'Failed to load project status data', defaultData: [] },
+              { endpoint: 'activity-status', setter: setActivityStatus, errorMsg: 'Failed to load activity status data', defaultData: [] },
+              { endpoint: 'daily-activities', setter: setDailyActivities, errorMsg: 'Failed to load daily activities data', defaultData: [] },
+              { endpoint: 'top-developers', setter: setTopDevelopers, errorMsg: 'Failed to load top developers data', defaultData: [] },
+              { endpoint: 'tasks-without-activities', setter: setTasksWithoutActivities, errorMsg: 'Failed to load tasks without activities data', defaultData: [] },
+              { endpoint: 'project-priority', setter: setProjectPriority, errorMsg: 'Failed to load project priority data', defaultData: [] },
+              { endpoint: 'avg-estimated-days', setter: setAvgEstimatedDays, errorMsg: 'Failed to load average estimated days data', defaultData: [] },
+              { endpoint: 'upcoming-deadlines', setter: setUpcomingDeadlines, errorMsg: 'Failed to load upcoming deadlines data', defaultData: [] },
+              { endpoint: 'project-activity-status', setter: setProjectActivityStatus, errorMsg: 'Failed to load project activity status data', defaultData: {} },
+              { endpoint: 'activities2', setter: setActivities, errorMsg: 'Failed to load activities data', defaultData: [] },
+              { endpoint: 'latest-projects', setter: setLatestProjects, errorMsg: 'Failed to load latest projects data', defaultData: [] },
+              { endpoint: 'project-activities', setter: setProjectActivities, errorMsg: 'Failed to load project activities data', defaultData: [] },
+              { endpoint: 'project-developers', setter: setProjectDevelopers, errorMsg: 'Failed to load project developers data', defaultData: [] },
+              { endpoint: 'latest-activities-by-status', setter: setLatestActivitiesByStatus, errorMsg: 'Failed to load latest activities by status data', defaultData: { To_Do: [], In_Progress: [], Done: [] } },
+              { endpoint: 'developer-tasks', setter: setDeveloperTasks, errorMsg: 'Failed to load developer tasks data', defaultData: [] },
+              { endpoint: 'active-tasks', setter: setActiveTasks, errorMsg: 'Failed to load active tasks data', defaultData: [] },
+              { endpoint: 'dropdown-data', setter: setDropdownData, errorMsg: 'Failed to load dropdown data', defaultData: { developers: [], projects: [], tasks: [] } },
+            ];
+
+            endpoints.reduce((promise, { endpoint, setter, errorMsg, defaultData }) => {
+              return promise.then(() => new Promise(resolve => {
+                setTimeout(() => {
+                  fetchData(endpoint, setter, errorMsg, defaultData).then(resolve);
+                }, 100);
+              }));
+            }, Promise.resolve());
           })
           .catch(err => {
             setAuthError(err.message);
