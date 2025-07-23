@@ -157,7 +157,6 @@
         }
       }, []);
 
-      // Retry fetching dropdown-data when viewing Activities tab and dropdownData is empty
       React.useEffect(() => {
         if (isAuthenticated && view === 'activities' && 
             dropdownData.developers.length === 0 && 
@@ -300,12 +299,6 @@
         });
         chartRefs.current = {};
       }
-
-      React.useEffect(() => {
-        if (view !== 'login' && !isAuthenticated) {
-          setView('login');
-        }
-      }, [view, isAuthenticated]);
 
       React.useEffect(() => {
         if (!isAuthenticated || view === 'login') return;
@@ -515,7 +508,20 @@
         };
       }, [view, isAuthenticated, activityStatus, projectStatus, projectPriority, avgEstimatedDays, projectActivities, projectDevelopers]);
 
-      function getDeveloperName(id) {
+      function getDeveloperName(id, project_id, task_id, details) {
+        if (id === undefined || id === null) {
+          // Try to find the activity in activities array to get the correct developer_id
+          const matchingActivity = activities.find(
+            activity => activity.project_id === project_id && 
+                        activity.task_id === task_id && 
+                        activity.details === details
+          );
+          if (matchingActivity && matchingActivity.developer_id) {
+            const developer = dropdownData.developers.find(d => d.developer_id === matchingActivity.developer_id);
+            return developer ? `${developer.name} (ID: ${developer.developer_id})` : `Developer ${matchingActivity.developer_id}`;
+          }
+          return 'Unassigned';
+        }
         const developer = dropdownData.developers.find(d => d.developer_id === id);
         return developer ? `${developer.name} (ID: ${developer.developer_id})` : `Developer ${id}`;
       }
@@ -764,6 +770,8 @@
                 </div>
               </div>
               <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Latest Activities by Status</h3>
+              {console.log('latestActivitiesByStatus:', latestActivitiesByStatus)}
+              {console.log('activities:', activities)}
               {Object.keys(latestActivitiesByStatus).every(status => latestActivitiesByStatus[status].length === 0) ? (
                 <p className="text-gray-600">No activities available</p>
               ) : (
@@ -786,7 +794,7 @@
                           <tbody>
                             {latestActivitiesByStatus[status].map((activity, index) => (
                               <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                <td className="p-2 text-xs text-gray-600">{getDeveloperName(activity.developer_id)}</td>
+                                <td className="p-2 text-xs text-gray-600">{getDeveloperName(activity.developer_id, activity.project_id, activity.task_id, activity.details)}</td>
                                 <td className="p-2 text-xs text-gray-600">{getProjectName(activity.project_id)}</td>
                                 <td className="p-2 text-xs text-gray-600">{getTaskTitle(activity.task_id)}</td>
                                 <td className="p-2 text-xs text-gray-600">{activity.details || '-'}</td>
@@ -875,7 +883,7 @@
                     <tbody>
                       {getFilteredActivities().map((activity, index) => (
                         <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getDeveloperName(activity.developer_id)}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getDeveloperName(activity.developer_id, activity.project_id, activity.task_id, activity.details)}</td>
                           <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getProjectName(activity.project_id)}</td>
                           <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getTaskTitle(activity.task_id)}</td>
                           <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.details || '-'}</td>
