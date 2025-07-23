@@ -1,0 +1,1106 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Professional Activities Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen px-4 sm:px-6 md:px-8 py-8">
+  <div id="root" class="w-full max-w-7xl mx-auto"></div>
+  <div id="error-fallback" class="hidden text-center text-red-700 p-4"></div>
+  <script type="text/javascript">
+    var gk_isXlsx = false;
+    var gk_xlsxFileLookup = {};
+    var gk_fileData = {};
+    function filledCell(cell) {
+      return cell !== '' && cell != null;
+    }
+    function loadFileData(filename) {
+      if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+        try {
+          var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+          var firstSheetName = workbook.SheetNames[0];
+          var worksheet = workbook.Sheets[firstSheetName];
+          var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+          var filteredData = jsonData.filter(row => row.some(filledCell));
+          var headerRowIndex = filteredData.findIndex((row, index) =>
+            row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+          );
+          if (headerRowIndex === -1 || headerRowIndex > 25) {
+            headerRowIndex = 0;
+          }
+          var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+          csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+          return csv;
+        } catch (e) {
+          console.error(e);
+          return "";
+        }
+      }
+      return gk_fileData[filename] || "";
+    }
+  </script>
+  <script type="text/babel">
+    class ErrorBoundary extends React.Component {
+      state = { error: null };
+      static getDerivedStateFromError(error) {
+        return { error: error.message };
+      }
+      render() {
+        if (this.state.error) {
+          return (
+            <div className="text-center text-red-700 p-4">
+              Error: {this.state.error}. Please check the console for details.
+              <br />
+              <a href="index.html" className="text-blue-600 hover:underline">Go to Add Activity</a>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    function App() {
+      const [view, setView] = React.useState('login');
+      const [email, setEmail] = React.useState('');
+      const [password, setPassword] = React.useState('');
+      const [authError, setAuthError] = React.useState(null);
+      const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+      const [summary, setSummary] = React.useState({});
+      const [projectStatus, setProjectStatus] = React.useState([]);
+      const [activityStatus, setActivityStatus] = React.useState([]);
+      const [dailyActivities, setDailyActivities] = React.useState([]);
+      const [topDevelopers, setTopDevelopers] = React.useState([]);
+      const [tasksWithoutActivities, setTasksWithoutActivities] = React.useState([]);
+      const [projectPriority, setProjectPriority] = React.useState([]);
+      const [avgEstimatedDays, setAvgEstimatedDays] = React.useState([]);
+      const [upcomingDeadlines, setUpcomingDeadlines] = React.useState([]);
+      const [projectActivityStatus, setProjectActivityStatus] = React.useState({});
+      const [activities, setActivities] = React.useState([]);
+      const [dropdownData, setDropdownData] = React.useState({ developers: [], projects: [], tasks: [] });
+      const [latestProjects, setLatestProjects] = React.useState([]);
+      const [projectActivities, setProjectActivities] = React.useState([]);
+      const [projectDevelopers, setProjectDevelopers] = React.useState([]);
+      const [latestActivitiesByStatus, setLatestActivitiesByStatus] = React.useState({ To_Do: [], In_Progress: [], Done: [] });
+      const [developerTasks, setDeveloperTasks] = React.useState([]);
+      const [activeTasks, setActiveTasks] = React.useState([]);
+      const [error, setError] = React.useState(null);
+      const [filterDeveloper, setFilterDeveloper] = React.useState('');
+      const [filterStatus, setFilterStatus] = React.useState('');
+      const [filterTask, setFilterTask] = React.useState('');
+      const [filterProject, setFilterProject] = React.useState('');
+      const [calendarDate, setCalendarDate] = React.useState(new Date());
+      const chartRefs = React.useRef({});
+
+      React.useEffect(() => {
+        const storedEmail = localStorage.getItem('email');
+        const storedPassword = localStorage.getItem('password');
+        const storedAuth = localStorage.getItem('isAuthenticated');
+
+        if (storedEmail && storedPassword && storedAuth === 'true') {
+          setEmail(storedEmail);
+          setPassword(storedPassword);
+          setIsAuthenticated(true);
+          setView('summary');
+          fetch('https://fastapi.engineeringdevelopment.online/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: storedEmail, password: storedPassword }),
+          })
+            .then(response => {
+              if (!response.ok) {
+                throw new Error('Stored credentials are invalid');
+              }
+              fetchData('summary', setSummary, 'Failed to load summary data');
+              fetchData('project-status', setProjectStatus, 'Failed to load project status data');
+              fetchData('activity-status', setActivityStatus, 'Failed to load activity status data');
+              fetchData('daily-activities', setDailyActivities, 'Failed to load daily activities data');
+              fetchData('top-developers', setTopDevelopers, 'Failed to load top developers data');
+              fetchData('tasks-without-activities', setTasksWithoutActivities, 'Failed to load tasks without activities data');
+              fetchData('project-priority', setProjectPriority, 'Failed to load project priority data');
+              fetchData('avg-estimated-days', setAvgEstimatedDays, 'Failed to load average estimated days data');
+              fetchData('upcoming-deadlines', setUpcomingDeadlines, 'Failed to load upcoming deadlines data');
+              fetchData('project-activity-status', setProjectActivityStatus, 'Failed to load project activity status data');
+              fetchData('activities2', setActivities, 'Failed to load activities data');
+              fetchData('latest-projects', setLatestProjects, 'Failed to load latest projects data');
+              fetchData('project-activities', setProjectActivities, 'Failed to load project activities data');
+              fetchData('project-developers', setProjectDevelopers, 'Failed to load project developers data');
+              fetchData('latest-activities-by-status', setLatestActivitiesByStatus, 'Failed to load latest activities by status data');
+              fetchData('developer-tasks', setDeveloperTasks, 'Failed to load developer tasks data');
+              fetchData('active-tasks', setActiveTasks, 'Failed to load active tasks data');
+            })
+            .catch(err => {
+              console.error('Session validation error:', err);
+              setAuthError('Session expired. Please log in again.');
+              setIsAuthenticated(false);
+              setView('login');
+              localStorage.removeItem('email');
+              localStorage.removeItem('password');
+              localStorage.removeItem('isAuthenticated');
+            });
+        }
+      }, []);
+
+      function fetchData(endpoint, setter, errorMsg, isAuth = true) {
+        if (!isAuth) {
+          setError('Please log in to access the dashboard');
+          return;
+        }
+         const storedEmail = localStorage.getItem('email');
+const storedPassword = localStorage.getItem('password');
+
+fetch('https://fastapi.engineeringdevelopment.online/' + endpoint + '?email=' + encodeURIComponent(storedEmail) + '&password=' + encodeURIComponent(storedPassword))
+ .then(response => {
+            console.log(endpoint + ' response status:', response.status, response.statusText);
+            if (!response.ok) {
+              if (response.status === 401) throw new Error('Invalid credentials. Please log in again.');
+              if (response.status === 403) throw new Error('Insufficient permissions to access this data');
+              throw new Error('HTTP error! Status: ' + response.status + ' ' + response.statusText);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log(endpoint + ' data received:', data);
+            setter(data);
+          })
+          .catch(err => {
+            console.error('Error fetching ' + endpoint + ':', err);
+            setError(errorMsg + ': ' + err.message);
+            if (err.message.includes('Invalid credentials')) {
+              setIsAuthenticated(false);
+              setView('login');
+              localStorage.removeItem('email');
+              localStorage.removeItem('password');
+              localStorage.removeItem('isAuthenticated');
+            }
+          });
+      }
+
+      function handleLogin(e) {
+        e.preventDefault();
+        fetch('https://fastapi.engineeringdevelopment.online/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        })
+          .then(response => {
+            if (!response.ok) {
+              if (response.status === 401) throw new Error('Invalid email or password');
+              throw new Error('HTTP error! Status: ' + response.status);
+            }
+            return response.json();
+          })
+          .then(data => {
+            setIsAuthenticated(true);
+            setAuthError(null);
+            setView('summary');
+            localStorage.setItem('email', email);
+            localStorage.setItem('password', password);
+            localStorage.setItem('isAuthenticated', 'true');
+            fetchData('summary', setSummary, 'Failed to load summary data');
+            fetchData('project-status', setProjectStatus, 'Failed to load project status data');
+            fetchData('activity-status', setActivityStatus, 'Failed to load activity status data');
+            fetchData('daily-activities', setDailyActivities, 'Failed to load daily activities data');
+            fetchData('top-developers', setTopDevelopers, 'Failed to load top developers data');
+            fetchData('tasks-without-activities', setTasksWithoutActivities, 'Failed to load tasks without activities data');
+            fetchData('project-priority', setProjectPriority, 'Failed to load project priority data');
+            fetchData('avg-estimated-days', setAvgEstimatedDays, 'Failed to load average estimated days data');
+            fetchData('upcoming-deadlines', setUpcomingDeadlines, 'Failed to load upcoming deadlines data');
+            fetchData('project-activity-status', setProjectActivityStatus, 'Failed to load project activity status data');
+            fetchData('activities2', setActivities, 'Failed to load activities data');
+            fetchData('latest-projects', setLatestProjects, 'Failed to load latest projects data');
+            fetchData('project-activities', setProjectActivities, 'Failed to load project activities data');
+            fetchData('project-developers', setProjectDevelopers, 'Failed to load project developers data');
+            fetchData('latest-activities-by-status', setLatestActivitiesByStatus, 'Failed to load latest activities by status data');
+            fetchData('developer-tasks', setDeveloperTasks, 'Failed to load developer tasks data');
+            fetchData('active-tasks', setActiveTasks, 'Failed to load active tasks data');
+          })
+          .catch(err => {
+            setAuthError(err.message);
+            console.error('Login error:', err);
+          });
+      }
+
+      function handleLogout() {
+        setIsAuthenticated(false);
+        setEmail('');
+        setPassword('');
+        setView('login');
+        setError(null);
+        setSummary({});
+        setProjectStatus([]);
+        setActivityStatus([]);
+        setDailyActivities([]);
+        setTopDevelopers([]);
+        setTasksWithoutActivities([]);
+        setProjectPriority([]);
+        setAvgEstimatedDays([]);
+        setUpcomingDeadlines([]);
+        setProjectActivityStatus({});
+        setActivities([]);
+        setDropdownData({ developers: [], projects: [], tasks: [] });
+        setLatestProjects([]);
+        setProjectActivities([]);
+        setProjectDevelopers([]);
+        setLatestActivitiesByStatus({ To_Do: [], In_Progress: [], Done: [] });
+        setDeveloperTasks([]);
+        setActiveTasks([]);
+        localStorage.removeItem('email');
+        localStorage.removeItem('password');
+        localStorage.removeItem('isAuthenticated');
+        Object.keys(chartRefs.current).forEach(key => {
+          if (chartRefs.current[key]) {
+            chartRefs.current[key].destroy();
+            chartRefs.current[key] = null;
+          }
+        });
+        chartRefs.current = {};
+      }
+
+      React.useEffect(() => {
+        if (view !== 'login' && !isAuthenticated) {
+          setView('login');
+        }
+      }, [view, isAuthenticated]);
+
+      React.useEffect(() => {
+        if (!isAuthenticated || view === 'login') return;
+
+        const createChart = (canvasId, config) => {
+          const canvas = document.getElementById(canvasId);
+          if (!canvas) {
+            console.warn(`Canvas ${canvasId} not found`);
+            return;
+          }
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            console.warn(`Failed to get 2D context for ${canvasId}`);
+            return;
+          }
+          if (chartRefs.current[canvasId]) {
+            chartRefs.current[canvasId].destroy();
+            chartRefs.current[canvasId] = null;
+          }
+          chartRefs.current[canvasId] = new Chart(ctx, config);
+          console.log(`Created chart: ${canvasId}`);
+        };
+
+        try {
+          Object.keys(chartRefs.current).forEach(key => {
+            if (chartRefs.current[key]) {
+              chartRefs.current[key].destroy();
+              chartRefs.current[key] = null;
+              console.log('Destroyed chart:', key);
+            }
+          });
+
+          if (view === 'summary') {
+            const uniqueProjectIds = [...new Set(projectActivities.map(p => p.project_id))];
+            uniqueProjectIds.forEach(projectId => {
+              const project = projectActivities.find(p => p.project_id === projectId);
+              const activities = projectActivities.filter(p => p.project_id === projectId);
+              const statuses = ['To_Do', 'In_Progress', 'Done', 'None'];
+              const data = statuses.map(status => {
+                const item = activities.find(a => a.status === status);
+                return item ? item.activity_count : 0;
+              });
+              createChart(`projectPieChart_${projectId}`, {
+                type: 'pie',
+                data: {
+                  labels: statuses.map(s => s.replace('_', ' ')),
+                  datasets: [{
+                    data,
+                    backgroundColor: ['#FF6384', '#36A2EB', '#4BC0C0', '#D3D3D3'],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: project ? project.name : `Project ${projectId}`, font: { size: 14 } }
+                  }
+                }
+              });
+            });
+          }
+
+          if (view === 'projects') {
+            if (projectStatus.length > 0) {
+              createChart('projectStatusChart', {
+                type: 'bar',
+                data: {
+                  labels: projectStatus.map(s => s.status),
+                  datasets: [{
+                    label: 'Project Count',
+                    data: projectStatus.map(s => s.project_count),
+                    backgroundColor: '#36A2EB',
+                    borderColor: '#2B8AC6',
+                    borderWidth: 1
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Status Breakdown', font: { size: 14 } } },
+                  scales: { y: { beginAtZero: true, title: { display: true, text: 'Projects', font: { size: 12 } } } }
+                }
+              });
+            }
+
+            if (projectPriority.length > 0) {
+              const statuses = ['Planning', 'In_Progress', 'Completed', 'On_Hold'];
+              const priorities = ['Low', 'Medium', 'High', 'Unknown'];
+              const datasets = priorities.map(priority => ({
+                label: priority,
+                data: statuses.map(status => {
+                  const item = projectPriority.find(p => p.status === status && p.priority === priority);
+                  return item ? item.count : 0;
+                }),
+                backgroundColor: priority === 'Low' ? '#4BC0C0' : priority === 'Medium' ? '#36A2EB' : priority === 'High' ? '#FF6384' : '#D3D3D3'
+              }));
+              createChart('projectPriorityChart', {
+                type: 'bar',
+                data: { labels: statuses, datasets },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: { legend: { position: 'top' }, title: { display: true, text: 'Project Priority by Status', font: { size: 14 } } },
+                  scales: { y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Projects', font: { size: 12 } } }, x: { stacked: true } }
+                }
+              });
+            }
+
+            const uniqueProjectIds = [...new Set(projectDevelopers.map(p => p.project_id))];
+            uniqueProjectIds.forEach(projectId => {
+              const project = projectDevelopers.find(p => p.project_id === projectId);
+              const developers = projectDevelopers.filter(p => p.project_id === projectId && p.developer_name !== "None");
+              if (developers.length > 0) {
+                createChart(`projectDevelopersChart_${projectId}`, {
+                  type: 'bar',
+                  data: {
+                    labels: developers.map(d => d.developer_name),
+                    datasets: [{
+                      label: 'Activity Count',
+                      data: developers.map(d => d.activity_count),
+                      backgroundColor: '#36A2EB',
+                      borderColor: '#2B8AC6',
+                      borderWidth: 1
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', labels: { font: { size: 12 } } }, title: { display: true, text: `Developers for ${project.project_name}`, font: { size: 14 } } },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Activities', font: { size: 12 } } } }
+                  }
+                });
+              }
+            });
+          }
+
+          if (view === 'activities' && activityStatus.length > 0) {
+            createChart('activityStatusChart', {
+              type: 'doughnut',
+              data: {
+                labels: activityStatus.map(s => s.status.replace('_', ' ')),
+                datasets: [{
+                  data: activityStatus.map(s => s.activity_count),
+                  backgroundColor: ['#FF6384', '#36A2EB', '#4BC0C0'],
+                  borderColor: '#fff',
+                  borderWidth: 2
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top', labels: { font: { size: 12 } } }, title: { display: true, text: 'Activity Status Breakdown', font: { size: 14 } } }
+              }
+            });
+          }
+
+          if (view === 'developers' && avgEstimatedDays.length > 0) {
+            createChart('avgEstimatedDaysChart', {
+              type: 'bar',
+              data: {
+                labels: avgEstimatedDays.map(d => d.name),
+                datasets: [{
+                  label: 'Average Estimated Days',
+                  data: avgEstimatedDays.map(d => Math.min(d.avg_estimated, 100)),
+                  backgroundColor: '#36A2EB',
+                  borderColor: '#2B8AC6',
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { position: 'top', labels: { font: { size: 12 } } },
+                  title: { display: true, text: 'Average Estimated Days per Developer', font: { size: 14 } },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context) {
+                        const actualValue = avgEstimatedDays[context.dataIndex].avg_estimated;
+                        return 'Average Days: ' + actualValue;
+                      }
+                    }
+                  }
+                },
+                scales: {
+                  y: { beginAtZero: true, max: 100, title: { display: true, text: 'Days (Capped at 100)', font: { size: 12 } } }
+                }
+              }
+            });
+          }
+        } catch (chartError) {
+          console.error('Error rendering charts:', chartError);
+          setError('Failed to render charts: ' + chartError.message);
+        }
+
+        return () => {
+          Object.keys(chartRefs.current).forEach(key => {
+            if (chartRefs.current[key]) {
+              chartRefs.current[key].destroy();
+              chartRefs.current[key] = null;
+              console.log('Cleaned up chart on unmount:', key);
+            }
+          });
+        };
+      }, [view, isAuthenticated, activityStatus, projectStatus, projectPriority, avgEstimatedDays, projectActivities, projectDevelopers]);
+
+      function getDeveloperName(id) {
+        const developer = dropdownData.developers.find(d => d.developer_id === id);
+        return developer ? `${developer.name} (ID: ${developer.developer_id})` : `Developer ${id}`;
+      }
+
+      function getProjectName(id) {
+        const project = dropdownData.projects.find(p => p.project_id === id);
+        return project ? `${project.name} (ID: ${project.project_id})` : `Project ${id}`;
+      }
+
+      function getTaskTitle(id) {
+        const task = dropdownData.tasks.find(t => t.task_id === id);
+        return task ? `${task.title} (ID: ${task.task_id})` : `Task ${id}`;
+      }
+
+      function getFilteredActivities() {
+        return activities.filter(activity => {
+          const matchesDeveloper = filterDeveloper ? activity.developer_id === parseInt(filterDeveloper) : true;
+          const matchesStatus = filterStatus && filterStatus !== 'All' ? activity.status === filterStatus : true;
+          const matchesTask = filterTask ? activity.task_id === parseInt(filterTask) : true;
+          const matchesProject = filterProject ? activity.project_id === parseInt(filterProject) : true;
+          return matchesDeveloper && matchesStatus && matchesTask && matchesProject;
+        });
+      }
+
+      function generateCalendar(deadlines) {
+        const monthStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
+        const monthEnd = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0);
+        const daysInMonth = monthEnd.getDate();
+        const firstDay = monthStart.getDay();
+        const calendarDays = [];
+
+        for (let i = 0; i < firstDay; i++) {
+          calendarDays.push(null);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateStr = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dayDeadlines = deadlines.filter(d => d.delivery_date === dateStr);
+          calendarDays.push({ day, deadlines: dayDeadlines });
+        }
+
+        return calendarDays;
+      }
+
+      function changeMonth(delta) {
+        setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + delta, 1));
+      }
+
+      function resetFilters() {
+        setFilterDeveloper('');
+        setFilterStatus('');
+        setFilterTask('');
+        setFilterProject('');
+      }
+
+      if (view === 'login') {
+        return (
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 md:p-8 max-w-md mx-auto">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 mb-6 text-center">Login</h1>
+            {authError && (
+              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-center">
+                {authError}
+              </div>
+            )}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Enter your email"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Enter your password"
+                />
+              </div>
+              <button
+                onClick={handleLogin}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Log In
+              </button>
+            </div>
+            <p className="mt-4 text-sm text-gray-600 text-center">
+              Need to add an activity? <a href="index.html" className="text-blue-600 hover:underline">Go to Add Activity</a>
+            </p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 mb-4 sm:mb-0">Professional Activities Dashboard</h1>
+            <div className="flex space-x-2">
+              <select
+                value={view}
+                onChange={e => setView(e.target.value)}
+                className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 w-full sm:w-auto"
+              >
+                <option value="summary">Summary</option>
+                <option value="projects">Projects</option>
+                <option value="activities">Activities</option>
+                <option value="developers">Developers</option>
+                <option value="tasks">Tasks</option>
+                <option value="deadlines">Deadlines</option>
+              </select>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Log Out
+              </button>
+            </div>
+          </div>
+          {error && (
+            <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+          {view === 'summary' && (
+            <div>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Summary</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="bg-blue-100 p-4 rounded-lg shadow">
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Developers</h3>
+                  <p className="text-xl md:text-2xl font-bold text-blue-600">{summary.total_developers || '0'}</p>
+                </div>
+                <div className="bg-green-100 p-4 rounded-lg shadow">
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Projects</h3>
+                  <p className="text-xl md:text-2xl font-bold text-green-600">{summary.total_projects || '0'}</p>
+                </div>
+                <div className="bg-yellow-100 p-4 rounded-lg shadow">
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Tasks</h3>
+                  <p className="text-xl md:text-2xl font-bold text-yellow-600">{summary.total_tasks || '0'}</p>
+                </div>
+                <div className="bg-purple-100 p-4 rounded-lg shadow">
+                  <h3 className="text-base md:text-lg font-medium text-gray-700">Total Activities</h3>
+                  <p className="text-xl md:text-2xl font-bold text-purple-600">{summary.total_activities || '0'}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Latest 4 Projects</h3>
+                  {latestProjects.length === 0 ? (
+                    <p className="text-gray-600">No projects available</p>
+                  ) : (
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-200">
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Project</th>
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {latestProjects.map((project, index) => (
+                          <tr key={project.project_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.name} (ID: {project.project_id})</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{project.status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Activities per Project</h3>
+                  {projectActivities.length === 0 ? (
+                    <p className="text-gray-600">No project activity data available</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {[...new Set(projectActivities.map(p => p.project_id))].map(projectId => (
+                        <div key={projectId} className="w-full h-64">
+                          <canvas id={`projectPieChart_${projectId}`} className="w-full h-full"></canvas>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {view === 'projects' && (
+            <div>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Project Insights</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Project Status Breakdown</h3>
+                  {projectStatus.length === 0 ? (
+                    <p className="text-gray-600">No project status data available</p>
+                  ) : (
+                    <canvas id="projectStatusChart" className="w-full h-full"></canvas>
+                  )}
+                </div>
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Project Priority by Status</h3>
+                  {projectPriority.length === 0 ? (
+                    <p className="text-gray-600">No project priority data available</p>
+                  ) : (
+                    <canvas id="projectPriorityChart" className="w-full h-full"></canvas>
+                  )}
+                </div>
+              </div>
+              <h3 className="text-base md:text-lg font-medium mb-2 mt-4 md:mt-6 text-gray-700">Developers per Project</h3>
+              {projectDevelopers.length === 0 ? (
+                <p className="text-gray-600">No developer data available</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                  {[...new Set(projectDevelopers.map(p => p.project_id))].map(projectId => {
+                    const project = projectDevelopers.find(p => p.project_id === projectId);
+                    return (
+                      <div key={projectId} className="w-full h-64">
+                        <h4 className="text-sm md:text-md font-medium mb-2 text-gray-700">{project.project_name} (ID: {projectId})</h4>
+                        {projectDevelopers.filter(p => p.project_id === projectId && p.developer_name !== "None").length === 0 ? (
+                          <p className="text-gray-600">No developers assigned</p>
+                        ) : (
+                          <canvas id={`projectDevelopersChart_${projectId}`} className="w-full h-full"></canvas>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          {view === 'activities' && (
+            <div>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Activity Insights</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Activity Status Breakdown</h3>
+                  {activityStatus.length === 0 ? (
+                    <p className="text-gray-600">No activity status data available</p>
+                  ) : (
+                    <canvas id="activityStatusChart" className="w-full h-full"></canvas>
+                  )}
+                </div>
+              </div>
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Latest Activities by Status</h3>
+              {Object.keys(latestActivitiesByStatus).every(status => latestActivitiesByStatus[status].length === 0) ? (
+                <p className="text-gray-600">No activities available</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {['To_Do', 'In_Progress', 'Done'].map(status => (
+                    <div key={status}>
+                      <h4 className="text-sm md:text-md font-medium mb-2 text-gray-700">{status.replace('_', ' ')}</h4>
+                      {latestActivitiesByStatus[status].length === 0 ? (
+                        <p className="text-gray-600">No {status.replace('_', ' ')} activities</p>
+                      ) : (
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-gray-200">
+                              <th className="p-2 text-left text-xs font-medium text-gray-700">Developer</th>
+                              <th className="p-2 text-left text-xs font-medium text-gray-700">Project</th>
+                              <th className="p-2 text-left text-xs font-medium text-gray-700">Task</th>
+                              <th className="p-2 text-left text-xs font-medium text-gray-700">Details</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {latestActivitiesByStatus[status].map((activity, index) => (
+                              <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                <td className="p-2 text-xs text-gray-600">{getDeveloperName(activity.developer_id)}</td>
+                                <td className="p-2 text-xs text-gray-600">{getProjectName(activity.project_id)}</td>
+                                <td className="p-2 text-xs text-gray-600">{getTaskTitle(activity.task_id)}</td>
+                                <td className="p-2 text-xs text-gray-600">{activity.details || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <h3 className="text-base md:text-lg font-medium mb-2 mt-4 md:mt-6 text-gray-700">Activity Details</h3>
+              <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <select
+                  value={filterDeveloper}
+                  onChange={e => setFilterDeveloper(e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Developers</option>
+                  {dropdownData.developers.map(dev => (
+                    <option key={dev.developer_id} value={dev.developer_id}>
+                      {dev.name} (ID: {dev.developer_id})
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterStatus}
+                  onChange={e => setFilterStatus(e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="All">All</option>
+                  <option value="To_Do">To Do</option>
+                  <option value="In_Progress">In Progress</option>
+                  <option value="Done">Done</option>
+                </select>
+                <select
+                  value={filterTask}
+                  onChange={e => setFilterTask(e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Tasks</option>
+                  {dropdownData.tasks.map(task => (
+                    <option key={task.task_id} value={task.task_id}>
+                      {task.title} (ID: {task.task_id})
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterProject}
+                  onChange={e => setFilterProject(e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="">All Projects</option>
+                  {dropdownData.projects.map(project => (
+                    <option key={project.project_id} value={project.project_id}>
+                      {project.name} (ID: {project.project_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={resetFilters}
+                className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Clear Filters
+              </button>
+              {getFilteredActivities().length === 0 ? (
+                <div className="text-center text-gray-600 p-4">
+                  No activities match the selected filters. <a href="index.html" className="text-blue-600 hover:underline">Add an activity</a> to get started.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200">
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Developer</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Project</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Details</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Estimated Days</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getFilteredActivities().map((activity, index) => (
+                        <tr key={activity.activity_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getDeveloperName(activity.developer_id)}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getProjectName(activity.project_id)}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{getTaskTitle(activity.task_id)}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.details || '-'}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.status ? activity.status.replace('_', ' ') : '-'}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{activity.estimated_days || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <h3 className="text-base md:text-lg font-medium mb-2 mt-4 md:mt-6 text-gray-700">Activity Heatmap</h3>
+              {dailyActivities.length === 0 ? (
+                <p className="text-gray-600">No daily activity data available</p>
+              ) : (
+                <div className="grid grid-cols-7 gap-1">
+                  {dailyActivities.map((day, index) => {
+                    const intensity = Math.min(day.activities / 5, 1);
+                    const bgColor = `rgba(54, 162, 235, ${0.2 + intensity * 0.8})`;
+                    return (
+                      <div
+                        key={index}
+                        className="p-2 text-center text-xs text-gray-700 rounded"
+                        style={{ backgroundColor: bgColor }}
+                        title={`${day.day}: ${day.activities} activities`}
+                      >
+                        {day.day.split('-')[2]}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-xs md:text-sm text-gray-600 mt-2">Darker shades indicate more activities on that day.</p>
+            </div>
+          )}
+          {view === 'developers' && (
+            <div>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Developer Insights</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Top Developers by Activity</h3>
+                  {topDevelopers.length === 0 ? (
+                    <p className="text-gray-600">No top developers data available</p>
+                  ) : (
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-200">
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Developer</th>
+                          <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Activity Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topDevelopers.map((dev, index) => (
+                          <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.name}</td>
+                            <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.activity_count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div className="w-full h-64">
+                  <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Average Estimated Days</h3>
+                  {avgEstimatedDays.length === 0 ? (
+                    <p className="text-gray-600">No average estimated days data available</p>
+                  ) : (
+                    <canvas id="avgEstimatedDaysChart" className="w-full h-full"></canvas>
+                  )}
+                </div>
+              </div>
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Developer Task Assignments</h3>
+              {developerTasks.length === 0 ? (
+                <p className="text-gray-600">No developer task data available</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200">
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Developer</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Top 2 Tasks</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Total Tasks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {developerTasks.map((dev, index) => (
+                        <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.developer_name}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">
+                            {dev.top_tasks.length === 0 ? '-' : dev.top_tasks.map(task => (
+                              <div key={task.task_id}>
+                                {task.title} (ID: {task.task_id}, Activities: {task.activity_count})
+                              </div>
+                            ))}
+                          </td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{dev.total_tasks}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+          {view === 'tasks' && (
+            <div>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Task Insights</h2>
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Tasks Without Activities</h3>
+              {tasksWithoutActivities.length === 0 ? (
+                <div className="text-center text-gray-600 p-4">All tasks are assigned to activities.</div>
+              ) : (
+                <div className="overflow-x-auto mb-6">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-red-100">
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task ID</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Title</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tasksWithoutActivities.map((task, index) => (
+                        <tr key={task.task_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.task_id}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.title}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <h3 className="text-base md:text-lg font-medium mb-2 text-gray-700">Active Tasks</h3>
+              {activeTasks.length === 0 ? (
+                <div className="text-center text-gray-600 p-4">No active tasks found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-green-100">
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Task ID</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Title</th>
+                        <th className="p-2 md:p-3 text-left text-xs md:text-sm font-medium text-gray-700">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeTasks.map((task, index) => (
+                        <tr key={task.task_id || index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.task_id}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.title}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm text-gray-600">{task.status.replace('_', ' ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+          {view === 'deadlines' && (
+            <div>
+              <h2 className="text-lg md:text-xl font-semibold mb-4 text-gray-700">Upcoming Deadlines</h2>
+              {upcomingDeadlines.length === 0 ? (
+                <p className="text-gray-600">No upcoming deadlines available</p>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-4">
+                    <button
+                      onClick={() => changeMonth(-1)}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Previous
+                    </button>
+                    <h3 className="text-base md:text-lg font-medium text-gray-700">
+                      {calendarDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <button
+                      onClick={() => changeMonth(1)}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="p-2 text-xs md:text-sm font-medium text-gray-700">{day}</div>
+                    ))}
+                    {generateCalendar(upcomingDeadlines).map((day, index) => (
+                      <div
+                        key={index}
+                        className={`p-2 text-xs md:text-sm rounded ${day && day.deadlines.length > 0 ? 'bg-blue-100 hover:bg-blue-200' : 'bg-white'} ${!day ? 'bg-gray-100' : ''}`}
+                        title={day && day.deadlines.length > 0 ? day.deadlines.map(d => `${d.name} (${d.status})`).join('\n') : ''}
+                      >
+                        {day ? day.day : ''}
+                        {day && day.deadlines.length > 0 && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            {day.deadlines.map((d, i) => (
+                              <div key={i} className="truncate">{d.name}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    try {
+      console.log('Attempting to render React component...');
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      );
+      console.log('React component rendered successfully');
+    } catch (error) {
+      console.error('Error rendering React component:', error);
+      const fallback = document.getElementById('error-fallback');
+      fallback.classList.remove('hidden');
+      fallback.innerHTML = `Failed to load dashboard: ${error.message}. Please check the console for details and ensure all scripts and APIs are accessible. <br><a href="index.html" class="text-blue-600 hover:underline">Go to Add Activity</a>`;
+    }
+  </script>
+</body>
+</html>
